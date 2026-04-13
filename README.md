@@ -93,3 +93,8 @@ NexOS Scheduler is built as a **single, dependency-light HTML file** — no buil
 - **Priority inversion demo** — a dedicated scenario showing the classic Mars Pathfinder bug and how priority inheritance resolves it
 - **Mobile-responsive layout** — the current UI assumes a wide screen; a simplified mobile view would open it to more learners
 - **Pluggable algorithm API** — let users write and inject their own scheduling function in a sandboxed editor, making NexOS a platform rather than a fixed simulator
+
+---
+
+## Try It Out Here:
+https://anirudh-mannattil1991.github.io/nexos-scheduler/
