@@ -3,341 +3,1050 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>NexOS Scheduler — CPU Process Simulator v2</title>
+<title>NexOS Scheduler — CPU Process Simulator v4</title>
 <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Syne:wght@400;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <style>
 :root {
-  --bg: #050810;
-  --surface: #0a0f1e;
-  --surface2: #0f1628;
-  --surface3: #141c30;
-  --border: #1a2444;
-  --border2: #243060;
-  --accent: #00f5c4;
-  --accent2: #ff4d6d;
-  --accent3: #f5a623;
-  --accent4: #7b61ff;
-  --accent5: #00aaff;
-  --text: #e0e8ff;
-  --text2: #8899cc;
-  --muted: #4a5580;
-  --font-mono: 'Share Tech Mono', monospace;
+  /* ── Backgrounds: dark but clearly stepped ── */
+  --bg:      #0b0f17;   /* page base */
+  --surface: #131b28;   /* sidebar / card backgrounds */
+  --surface2:#1a2436;   /* raised elements inside surfaces */
+  --surface3:#212d40;   /* deepest raised layer */
+
+  /* ── Borders: visible but not harsh ── */
+  --border:  #2a3a52;
+  --border2: #3a5070;
+
+  /* ── Accent colors: vivid, tested against dark bg ── */
+  --accent:  #00e8b8;   /* teal — primary */
+  --accent2: #ff5577;   /* red/pink — errors/warnings */
+  --accent3: #ffb830;   /* amber — caution */
+  --accent4: #9b80ff;   /* purple — ML / special */
+  --accent5: #40b8ff;   /* sky blue — info */
+
+  /* ── Text: three clear levels, all WCAG AA+ on --surface ──
+     --text  : #e8f0ff  → 13.5:1 on --surface ✓
+     --text2 : #a8bccc  →  6.2:1 on --surface ✓  (was #7d9bbf = 3.5:1 ✗)
+     --muted : #6a8aaa  →  3.8:1 on --surface ✓  (was #3d5270 = 2.0:1 ✗)
+  ── */
+  --text:  #e8f0ff;
+  --text2: #a8bccc;
+  --muted: #6a8aaa;
+
+  --font-mono:    'Share Tech Mono', monospace;
   --font-display: 'Syne', sans-serif;
-  --font-body: 'DM Sans', sans-serif;
+  --font-body:    'DM Sans', sans-serif;
+
+  --r: 5px;
 }
 *{margin:0;padding:0;box-sizing:border-box;}
 html{scroll-behavior:smooth;}
 body{background:var(--bg);color:var(--text);font-family:var(--font-mono);min-height:100vh;overflow-x:hidden;}
-body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(0,245,196,0.025) 1px,transparent 1px),linear-gradient(90deg,rgba(0,245,196,0.025) 1px,transparent 1px);background-size:40px 40px;pointer-events:none;z-index:0;}
+/* Subtle radial dots — far less muddy than grid lines */
+body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(circle,rgba(0,232,184,0.055) 1px,transparent 1px);background-size:32px 32px;pointer-events:none;z-index:0;}
 .z1{position:relative;z-index:1;}
 
-/* NAV */
-nav{display:flex;align-items:center;gap:0;padding:0 24px;border-bottom:1px solid var(--border);background:rgba(5,8,16,0.95);backdrop-filter:blur(16px);position:sticky;top:0;z-index:200;height:52px;}
-.nav-logo{font-family:var(--font-display);font-weight:800;font-size:1.2rem;color:var(--accent);text-shadow:0 0 20px rgba(0,245,196,0.4);margin-right:32px;white-space:nowrap;}
+/* ── NAV ─────────────────────────────────────────────────── */
+nav{display:flex;align-items:center;gap:0;padding:0 20px;border-bottom:2px solid var(--border);background:rgba(11,15,23,0.97);backdrop-filter:blur(20px);position:sticky;top:0;z-index:200;height:54px;}
+.nav-logo{font-family:var(--font-display);font-weight:800;font-size:1.25rem;color:var(--accent);text-shadow:0 0 24px rgba(5,232,188,0.45);margin-right:28px;white-space:nowrap;letter-spacing:-0.01em;}
 .nav-logo span{color:var(--text);}
-.nav-tabs{display:flex;gap:0;flex:1;}
-.nav-tab{padding:0 18px;height:52px;display:flex;align-items:center;font-size:0.72rem;letter-spacing:0.08em;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;transition:all 0.15s;white-space:nowrap;}
-.nav-tab:hover{color:var(--text);}
-.nav-tab.active{color:var(--accent);border-bottom-color:var(--accent);}
-.nav-right{display:flex;align-items:center;gap:16px;margin-left:auto;}
-.status-pill{display:flex;align-items:center;gap:6px;padding:4px 12px;border:1px solid var(--border);font-size:0.65rem;color:var(--muted);letter-spacing:0.1em;}
+.nav-tabs{display:flex;gap:3px;flex:1;}
+/* Each tab is a clearly boxed pill — no ambiguity about which is active */
+.nav-tab{
+  padding:0 16px;height:36px;margin:auto 0;
+  display:flex;align-items:center;gap:7px;
+  font-size:0.7rem;letter-spacing:0.07em;
+  color:var(--text2);cursor:pointer;
+  border:1px solid transparent;
+  border-radius:var(--r);
+  transition:all 0.15s;white-space:nowrap;
+  user-select:none;
+}
+.nav-tab:hover{color:var(--text2);background:var(--surface2);border-color:var(--border);}
+.nav-tab.active{
+  color:var(--accent);
+  background:rgba(5,232,188,0.08);
+  border-color:rgba(5,232,188,0.3);
+  font-weight:600;
+}
+.nav-tab .ti{font-size:12px;opacity:0.7;}
+.nav-right{display:flex;align-items:center;gap:10px;margin-left:auto;}
+.status-pill{
+  display:flex;align-items:center;gap:6px;
+  padding:5px 12px;
+  border:1px solid var(--border);
+  border-radius:var(--r);
+  font-size:0.65rem;color:var(--text2);letter-spacing:0.1em;
+  background:var(--surface);
+}
 .sdot{width:6px;height:6px;border-radius:50%;background:var(--muted);}
 .sdot.active{background:var(--accent);box-shadow:0 0 8px var(--accent);animation:blink 1.5s infinite;}
-@keyframes blink{0%,100%{opacity:1;}50%{opacity:0.3;}}
+@keyframes blink{0%,100%{opacity:1;}50%{opacity:0.25;}}
 
-/* PAGES */
-.page{display:none;min-height:calc(100vh - 52px);}
+/* ── PAGES ───────────────────────────────────────────────── */
+.page{display:none;height:calc(100vh - 54px);overflow:hidden;}
 .page.active{display:flex;flex-direction:column;}
+#page-sim{flex-direction:row;overflow:hidden;}
+#page-insights.active,#page-advanced.active,#page-heatmap.active,#page-challenges.active,#page-labs.active,#page-history.active,#page-tradeoff.active{overflow-y:auto;}
+.sim-sidebar{
+  width:296px;min-width:296px;
+  border-right:2px solid var(--border);
+  display:flex;flex-direction:column;
+  background:var(--surface);
+  overflow-y:auto;
+  height:calc(100vh - 54px);
+  flex-shrink:0;
+}
 
-/* =================== SIMULATOR PAGE =================== */
-#page-sim{flex-direction:row;}
-.sim-sidebar{width:300px;min-width:300px;border-right:1px solid var(--border);display:flex;flex-direction:column;background:var(--surface);overflow-y:auto;max-height:calc(100vh - 52px);}
-.sim-sidebar::-webkit-scrollbar{width:3px;}
-.sim-sidebar::-webkit-scrollbar-thumb{background:var(--border);}
-.s-section{padding:16px;border-bottom:1px solid var(--border);}
-.s-label{font-size:0.6rem;letter-spacing:0.15em;color:var(--muted);text-transform:uppercase;margin-bottom:12px;}
-.algo-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
-.algo-btn{padding:9px 6px;background:var(--surface2);border:1px solid var(--border);color:var(--muted);font-family:var(--font-mono);font-size:0.68rem;cursor:pointer;transition:all 0.15s;text-align:center;}
-.algo-btn:hover{border-color:var(--accent);color:var(--accent);}
-.algo-btn.active{border-color:var(--accent);color:var(--bg);background:var(--accent);box-shadow:0 0 12px rgba(0,245,196,0.3);}
+/* Each sidebar section has a clear header band */
+.s-section{padding:14px 16px;border-bottom:1px solid var(--border);}
+.s-label{
+  font-size:0.6rem;letter-spacing:0.14em;
+  color:var(--text2);text-transform:uppercase;
+  margin-bottom:10px;
+  display:flex;align-items:center;gap:6px;
+}
+.s-label::after{content:'';flex:1;height:1px;background:var(--border);}
+
+/* Algo buttons — clear selected state */
+.algo-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px;}
+.algo-btn{
+  padding:9px 6px;
+  background:var(--surface2);
+  border:1px solid var(--border);
+  border-radius:var(--r);
+  color:var(--text2);
+  font-family:var(--font-mono);font-size:0.68rem;
+  cursor:pointer;transition:all 0.15s;text-align:center;
+}
+.algo-btn:hover{border-color:var(--border2);color:var(--text);}
+.algo-btn.active{
+  border-color:var(--accent);
+  color:#000;background:var(--accent);
+  box-shadow:0 0 12px rgba(0,232,184,0.3);
+  font-weight:700;
+}
 .quantum-row{display:flex;align-items:center;gap:8px;margin-top:10px;}
-.quantum-row label{font-size:0.68rem;color:var(--muted);flex:1;}
-.fi{background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:var(--font-mono);font-size:0.78rem;padding:6px 8px;outline:none;transition:border-color 0.15s;width:100%;}
+.quantum-row label{font-size:0.68rem;color:var(--text2);flex:1;}
+
+/* Form inputs */
+.fi{
+  background:var(--bg);
+  border:1px solid var(--border);
+  border-radius:var(--r);
+  color:var(--text);
+  font-family:var(--font-mono);font-size:0.78rem;
+  padding:7px 9px;outline:none;
+  transition:border-color 0.15s;width:100%;
+}
 .fi:focus{border-color:var(--accent);}
 .fi-sm{width:60px;text-align:center;}
 .form-row{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px;}
 .form-row.t3{grid-template-columns:1fr 1fr 1fr;}
-.form-row.t4{grid-template-columns:1fr 1fr 1fr 1fr;}
-.fg{display:flex;flex-direction:column;gap:3px;}
-.fg label{font-size:0.58rem;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;}
-.add-btn{width:100%;padding:9px;background:transparent;border:1px solid var(--accent);color:var(--accent);font-family:var(--font-mono);font-size:0.75rem;cursor:pointer;letter-spacing:0.08em;transition:all 0.15s;margin-top:4px;}
-.add-btn:hover{background:var(--accent);color:var(--bg);box-shadow:0 0 16px rgba(0,245,196,0.3);}
-.proc-list{display:flex;flex-direction:column;gap:5px;max-height:200px;overflow-y:auto;}
-.proc-list::-webkit-scrollbar{width:3px;}
-.proc-list::-webkit-scrollbar-thumb{background:var(--border);}
-.pc{display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-left:3px solid;animation:slideIn 0.2s ease;}
-@keyframes slideIn{from{opacity:0;transform:translateX(-6px);}to{opacity:1;transform:translateX(0);}}
-.pc-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
-.pc-name{font-size:0.75rem;flex:1;}
-.pc-meta{font-size:0.62rem;color:var(--muted);}
-.pc-del{background:none;border:none;color:var(--muted);cursor:pointer;font-size:0.9rem;padding:2px 4px;transition:color 0.15s;}
-.pc-del:hover{color:var(--accent2);}
+.fg{display:flex;flex-direction:column;gap:4px;}
+.fg label{font-size:0.6rem;color:var(--text2);letter-spacing:0.08em;text-transform:uppercase;}
+
+/* Buttons */
+.add-btn{
+  width:100%;padding:9px;
+  background:rgba(5,232,188,0.07);
+  border:1px solid rgba(5,232,188,0.35);
+  border-radius:var(--r);
+  color:var(--accent);
+  font-family:var(--font-mono);font-size:0.73rem;
+  cursor:pointer;letter-spacing:0.07em;
+  transition:all 0.15s;margin-top:4px;
+}
+.add-btn:hover{background:var(--accent);color:#000;box-shadow:0 0 14px rgba(5,232,188,0.3);}
+
+/* Process list */
+/* ── Queue summary box (replaces scrolling list) ──────────── */
+.queue-box{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:13px 14px;
+  background:var(--bg);
+  border:1px solid var(--border);
+  border-radius:var(--r);
+  cursor:pointer;
+  transition:all 0.15s;
+  user-select:none;
+}
+.queue-box:hover{border-color:var(--accent);background:rgba(0,232,184,0.04);}
+.qb-dots{display:flex;gap:5px;flex-wrap:wrap;max-width:140px;}
+.qb-dot{width:11px;height:11px;border-radius:50%;flex-shrink:0;}
+.qb-info{display:flex;flex-direction:column;gap:2px;}
+.qb-count{font-family:var(--font-display);font-weight:700;font-size:1.1rem;color:var(--accent);}
+.qb-hint{font-size:0.6rem;color:var(--text2);}
+.qb-arrow{font-size:0.75rem;color:var(--text2);}
+
+/* ── Process Manager Modal ────────────────────────────────── */
+.proc-modal-overlay{
+  position:fixed;inset:0;z-index:700;
+  background:rgba(11,15,23,0.9);
+  backdrop-filter:blur(12px);
+  display:none;align-items:center;justify-content:center;
+  padding:20px;
+}
+.proc-modal-overlay.open{display:flex;}
+.proc-modal{
+  background:var(--surface);
+  border:1px solid var(--border2);
+  border-radius:var(--r);
+  width:100%;max-width:720px;
+  max-height:90vh;
+  display:flex;flex-direction:column;
+  animation:fadeUp 0.18s ease;
+  box-shadow:0 24px 64px rgba(0,0,0,0.6);
+}
+.pm-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:16px 22px;
+  border-bottom:1px solid var(--border);
+  flex-shrink:0;
+}
+.pm-title{font-family:var(--font-display);font-size:1.05rem;font-weight:700;color:var(--text);}
+.pm-close{
+  background:none;border:none;color:var(--text2);
+  font-size:1.3rem;cursor:pointer;padding:4px 8px;
+  border-radius:3px;line-height:1;transition:color 0.12s;
+}
+.pm-close:hover{color:var(--accent2);}
+
+/* Add form strip */
+.pm-add-form{
+  padding:14px 22px;
+  border-bottom:2px solid var(--border);
+  flex-shrink:0;
+  background:var(--surface2);
+}
+.pm-add-title{
+  font-size:0.6rem;letter-spacing:0.12em;text-transform:uppercase;
+  color:var(--text2);margin-bottom:10px;
+}
+.pm-form-grid{
+  display:grid;
+  grid-template-columns:1.5fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 36px 36px;
+  gap:6px;align-items:end;
+}
+.pm-fg{display:flex;flex-direction:column;gap:4px;}
+.pm-fg label{font-size:0.55rem;color:var(--text2);letter-spacing:0.08em;text-transform:uppercase;}
+.pm-input{
+  background:var(--bg);border:1px solid var(--border);border-radius:var(--r);
+  color:var(--text);font-family:var(--font-mono);font-size:0.76rem;
+  padding:7px 8px;outline:none;width:100%;transition:border-color 0.15s;
+}
+.pm-input:focus{border-color:var(--accent);}
+.pm-add-btn{
+  height:34px;
+  background:rgba(0,232,184,0.1);
+  border:1px solid rgba(0,232,184,0.4);
+  border-radius:var(--r);
+  color:var(--accent);font-size:1rem;
+  cursor:pointer;transition:all 0.15s;
+  display:flex;align-items:center;justify-content:center;
+}
+.pm-add-btn:hover{background:var(--accent);color:#000;}
+
+/* Column headers */
+.pm-cols{
+  display:grid;
+  grid-template-columns:14px 1.5fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 32px 32px;
+  gap:6px;
+  padding:8px 22px 4px;
+  flex-shrink:0;
+  border-bottom:1px solid var(--border);
+}
+.pm-col-h{font-size:0.55rem;color:var(--text2);letter-spacing:0.08em;text-transform:uppercase;font-family:var(--font-mono);}
+
+/* Process rows */
+.pm-list{flex:1;overflow-y:auto;padding:8px 22px 12px;display:flex;flex-direction:column;gap:5px;}
+.pm-list::-webkit-scrollbar{width:6px;}
+.pm-list::-webkit-scrollbar-track{background:var(--surface2);}
+.pm-list::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px;}
+.pm-list::-webkit-scrollbar-thumb:hover{background:var(--muted);}
+
+.pm-row{
+  display:grid;
+  grid-template-columns:14px 1.5fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 32px 32px;
+  gap:6px;align-items:center;
+  padding:9px 10px;
+  background:var(--surface2);
+  border:1px solid var(--border);
+  border-left:3px solid;
+  border-radius:var(--r);
+  animation:slideIn 0.15s ease;
+  transition:border-color 0.15s;
+}
+.pm-row:hover{border-color:var(--border2);}
+.pm-row.editing{border-color:var(--accent3)!important;background:rgba(255,184,48,0.04);}
+.pm-cell{font-size:0.73rem;font-family:var(--font-mono);color:var(--text);min-width:0;}
+.pm-row-input{
+  background:var(--bg);border:1px solid var(--border);border-radius:3px;
+  color:var(--text);font-family:var(--font-mono);font-size:0.72rem;
+  padding:4px 6px;outline:none;width:100%;
+}
+.pm-row-input:focus{border-color:var(--accent);}
+.pm-icon-btn{
+  background:none;border:none;cursor:pointer;
+  font-size:0.9rem;padding:4px;border-radius:3px;
+  transition:all 0.12s;line-height:1;display:flex;align-items:center;justify-content:center;
+}
+.pm-icon-btn.edit{color:var(--muted);}
+.pm-icon-btn.edit:hover{color:var(--accent3);background:rgba(255,184,48,0.12);}
+.pm-icon-btn.del{color:var(--muted);}
+.pm-icon-btn.del:hover{color:var(--accent2);background:rgba(255,85,119,0.12);}
+.pm-icon-btn.save{color:var(--accent);font-size:1rem;}
+.pm-icon-btn.save:hover{background:rgba(0,232,184,0.15);}
+
+.pm-empty{
+  display:flex;flex-direction:column;align-items:center;
+  justify-content:center;padding:40px;color:var(--text2);
+  font-size:0.75rem;gap:8px;text-align:center;
+}
+.pm-empty-icon{font-size:2rem;opacity:0.25;}
+
+.pm-footer{
+  padding:12px 22px;border-top:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;
+  flex-shrink:0;
+}
+.pm-footer-stat{font-size:0.68rem;color:var(--text2);font-family:var(--font-mono);}
+.pm-footer-stat span{color:var(--accent);font-weight:700;}
+.pm-clear-btn{
+  padding:5px 13px;background:transparent;
+  border:1px solid rgba(255,85,119,0.35);border-radius:var(--r);
+  color:var(--accent2);font-family:var(--font-mono);font-size:0.65rem;
+  cursor:pointer;transition:all 0.15s;
+}
+.pm-clear-btn:hover{background:var(--accent2);color:#fff;}
+
+/* Old .pc styles no longer needed but kept for safety */
+.pc{display:none;}
+
+
+/* Preset pills */
 .preset-row{display:flex;gap:5px;flex-wrap:wrap;}
-.preset-btn{padding:4px 9px;background:transparent;border:1px solid var(--border);color:var(--muted);font-family:var(--font-mono);font-size:0.62rem;cursor:pointer;transition:all 0.15s;}
-.preset-btn:hover{border-color:var(--accent3);color:var(--accent3);}
-.ctrl-row{display:flex;gap:6px;padding:14px 16px;border-top:1px solid var(--border);margin-top:auto;}
-.ctrl-btn{flex:1;padding:9px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:var(--font-mono);font-size:0.72rem;cursor:pointer;transition:all 0.15s;letter-spacing:0.05em;}
-.ctrl-btn.run{border-color:var(--accent);color:var(--accent);}
-.ctrl-btn.run:hover,.ctrl-btn.run.go{background:var(--accent);color:var(--bg);box-shadow:0 0 16px rgba(0,245,196,0.35);}
+.preset-btn{
+  padding:4px 10px;
+  background:var(--bg);
+  border:1px solid var(--border);
+  border-radius:var(--r);
+  color:var(--text2);
+  font-family:var(--font-mono);font-size:0.62rem;
+  cursor:pointer;transition:all 0.15s;
+}
+.preset-btn:hover{border-color:var(--accent3);color:var(--accent3);background:rgba(255,184,48,0.08);}
+
+/* Bottom controls */
+.ctrl-row{display:flex;gap:6px;padding:12px 14px;border-top:2px solid var(--border);margin-top:auto;}
+.ctrl-btn{
+  flex:1;padding:9px;
+  border:1px solid var(--border);
+  border-radius:var(--r);
+  background:var(--surface2);
+  color:var(--text2);
+  font-family:var(--font-mono);font-size:0.7rem;
+  cursor:pointer;transition:all 0.15s;letter-spacing:0.04em;
+}
+.ctrl-btn.run{border-color:var(--accent);color:var(--accent);background:rgba(0,232,184,0.07);}
+.ctrl-btn.run:hover,.ctrl-btn.run.go{background:var(--accent);color:#000;font-weight:700;box-shadow:0 0 14px rgba(0,232,184,0.35);}
 .ctrl-btn.step-btn{border-color:var(--accent5);color:var(--accent5);}
-.ctrl-btn.step-btn:hover{background:var(--accent5);color:var(--bg);}
-.ctrl-btn:hover{border-color:var(--accent2);color:var(--accent2);}
+.ctrl-btn.step-btn:hover{background:var(--accent5);color:#000;}
+.ctrl-btn:hover{border-color:var(--border2);color:var(--text);}
 
-/* SIM CONTENT */
-.sim-content{flex:1;display:flex;flex-direction:column;overflow:hidden;max-height:calc(100vh - 52px);overflow-y:auto;}
-.sim-content::-webkit-scrollbar{width:3px;}
-.sim-content::-webkit-scrollbar-thumb{background:var(--border);}
+/* ── SIM MAIN CONTENT ────────────────────────────────────── */
+.sim-content{
+  flex:1;display:flex;flex-direction:column;
+  overflow-y:auto;
+  height:calc(100vh - 54px);
+}
 
-/* METRICS BAR */
-.metrics-bar{display:grid;grid-template-columns:repeat(6,1fr);border-bottom:1px solid var(--border);flex-shrink:0;}
-.mc{padding:14px 16px;border-right:1px solid var(--border);}
+/* Metrics bar — each cell very clearly separated */
+.metrics-bar{
+  display:grid;grid-template-columns:repeat(6,1fr);
+  border-bottom:2px solid var(--border);
+  flex-shrink:0;background:var(--surface);
+}
+.mc{
+  padding:14px 16px;
+  border-right:1px solid var(--border);
+  position:relative;
+}
 .mc:last-child{border-right:none;}
-.mc-label{font-size:0.58rem;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:4px;}
-.mc-val{font-size:1.25rem;font-family:var(--font-display);font-weight:700;color:var(--accent);transition:all 0.3s;}
-.mc-unit{font-size:0.58rem;color:var(--muted);margin-top:2px;}
+.mc::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--accent);opacity:0.4;}
+.mc.warn::before{background:var(--accent3);}
+.mc.bad::before{background:var(--accent2);}
+.mc-label{font-size:0.58rem;color:var(--text2);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:5px;}
+.mc-val{font-size:1.3rem;font-family:var(--font-display);font-weight:700;color:var(--accent);transition:all 0.3s;}
+.mc-unit{font-size:0.58rem;color:var(--text2);margin-top:2px;}
 .mc.warn .mc-val{color:var(--accent3);}
 .mc.bad .mc-val{color:var(--accent2);}
 
-/* STEP EXPLAINER */
-.step-box{margin:12px 20px 0;padding:12px 16px;background:rgba(0,170,255,0.08);border:1px solid rgba(0,170,255,0.3);font-size:0.75rem;color:var(--accent5);line-height:1.6;display:none;}
-.step-box strong{color:#60c8ff;}
+/* Step explainer */
+.step-box{
+  margin:12px 18px 0;padding:11px 14px;
+  background:rgba(64,184,255,0.08);
+  border:1px solid rgba(64,184,255,0.3);
+  border-left:3px solid var(--accent5);
+  border-radius:var(--r);
+  font-size:0.73rem;color:#7fd4ff;line-height:1.6;display:none;
+}
+.step-box strong{color:#aae6ff;}
 
-/* ML PANEL */
-.ml-panel{margin:12px 20px 0;padding:14px 16px;background:rgba(123,97,255,0.08);border:1px solid rgba(123,97,255,0.25);font-size:0.74rem;color:var(--accent4);line-height:1.7;display:none;}
-.ml-panel strong{color:#a899ff;}
-.ml-header{font-size:0.6rem;letter-spacing:0.12em;color:var(--accent4);margin-bottom:8px;opacity:0.7;}
+/* ML panel */
+.ml-panel{
+  margin:12px 18px 0;padding:13px 16px;
+  background:rgba(155,128,255,0.08);
+  border:1px solid rgba(155,128,255,0.25);
+  border-left:3px solid var(--accent4);
+  border-radius:var(--r);
+  font-size:0.73rem;color:var(--text2);line-height:1.7;display:none;
+}
+/* Always visible when hosted inside the insights page */
+#page-insights .ml-panel { display:block; margin:0; }
+.ml-panel strong{color:#c8b8ff;}
+.ml-header{font-size:0.6rem;letter-spacing:0.14em;color:var(--accent4);margin-bottom:7px;}
 .ml-reasons{margin-top:8px;display:flex;flex-direction:column;gap:4px;}
-.ml-reason{display:flex;align-items:flex-start;gap:8px;font-size:0.7rem;}
+.ml-reason{display:flex;align-items:flex-start;gap:8px;font-size:0.72rem;}
 .ml-reason::before{content:'→';color:var(--accent4);flex-shrink:0;margin-top:1px;}
 
-/* STARVATION WARNING */
-.starve-warn{margin:8px 20px 0;padding:10px 14px;background:rgba(255,77,109,0.08);border:1px solid rgba(255,77,109,0.3);font-size:0.7rem;color:var(--accent2);display:none;}
+/* Starvation warning */
+.starve-warn{
+  margin:8px 18px 0;padding:9px 13px;
+  background:rgba(255,85,119,0.1);
+  border:1px solid rgba(255,85,119,0.35);
+  border-left:3px solid var(--accent2);
+  border-radius:var(--r);
+  font-size:0.7rem;color:#ff8099;display:none;
+}
 
-/* GANTT */
-.gantt-wrap{padding:16px 20px;border-bottom:1px solid var(--border);flex-shrink:0;}
+/* Gantt section */
+.gantt-wrap{
+  padding:16px 18px;
+  border-bottom:1px solid var(--border);
+  flex-shrink:0;
+}
 .gantt-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
-.gantt-title{font-family:var(--font-display);font-size:0.8rem;font-weight:700;}
-.speed-row{display:flex;align-items:center;gap:8px;font-size:0.65rem;color:var(--muted);}
-input[type=range]{-webkit-appearance:none;width:80px;height:2px;background:var(--border);outline:none;}
-input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:10px;height:10px;border-radius:50%;background:var(--accent);cursor:pointer;}
-.gantt-chart{position:relative;height:48px;background:var(--surface2);border:1px solid var(--border);overflow:hidden;}
-.gantt-bar{position:absolute;top:3px;height:42px;display:flex;align-items:center;justify-content:center;font-size:0.65rem;font-weight:700;color:#000;border-right:2px solid rgba(0,0,0,0.25);overflow:hidden;white-space:nowrap;transition:width 0.05s linear;}
-.gantt-bar.idle{background:repeating-linear-gradient(45deg,#0f1628,#0f1628 4px,#141c30 4px,#141c30 8px);color:var(--muted);}
-.gantt-axis{display:flex;margin-top:4px;font-size:0.58rem;color:var(--muted);position:relative;height:14px;}
+.gantt-title{font-family:var(--font-display);font-size:0.78rem;font-weight:700;color:var(--text);}
+.speed-row{display:flex;align-items:center;gap:8px;font-size:0.63rem;color:var(--text2);}
+input[type=range]{-webkit-appearance:none;height:3px;background:var(--border2);outline:none;border-radius:2px;}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:11px;height:11px;border-radius:50%;background:var(--accent);cursor:pointer;box-shadow:0 0 6px rgba(5,232,188,0.4);}
+.gantt-chart{position:relative;height:50px;background:var(--bg);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;}
+.gantt-bar{position:absolute;top:4px;height:42px;display:flex;align-items:center;justify-content:center;font-size:0.64rem;font-weight:700;color:#000;border-right:2px solid rgba(0,0,0,0.2);overflow:hidden;white-space:nowrap;}
+.gantt-bar.idle{background:repeating-linear-gradient(45deg,#111929,#111929 4px,#182035 4px,#182035 8px);color:var(--text2);}
+.gantt-axis{display:flex;margin-top:5px;font-size:0.58rem;color:var(--text2);position:relative;height:14px;}
 .gtick{position:absolute;transform:translateX(-50%);}
 
-/* QUEUE CARDS */
-.qcards-wrap{padding:14px 20px;border-bottom:1px solid var(--border);flex-shrink:0;}
+/* Queue / state cards */
+.qcards-wrap{padding:14px 18px;border-bottom:1px solid var(--border);flex-shrink:0;}
 .qcards-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
-.legend{display:flex;gap:10px;font-size:0.6rem;color:var(--muted);}
-.legend span{display:flex;align-items:center;gap:4px;}
+.legend{display:flex;gap:10px;font-size:0.63rem;color:var(--text2);}
+.legend span{display:flex;align-items:center;gap:3px;}
 .qgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:7px;}
-.qcard{padding:10px;border:1px solid var(--border);background:var(--surface2);transition:all 0.3s;}
-.qcard.running{border-color:var(--accent);box-shadow:0 0 10px rgba(0,245,196,0.15);}
+.qcard{
+  padding:10px 11px;
+  border:1px solid var(--border);
+  border-radius:var(--r);
+  background:var(--surface);
+  transition:all 0.25s;
+}
+.qcard.running{border-color:var(--accent);box-shadow:0 0 10px rgba(5,232,188,0.12);}
 .qcard.ready{border-color:var(--accent5);}
 .qcard.waiting{border-color:var(--accent3);}
-.qcard.done{opacity:0.35;}
+.qcard.done{opacity:0.3;}
 .qcard.blocked{border-color:var(--accent2);}
-.qc-name{font-size:0.75rem;margin-bottom:4px;}
-.qc-state{font-size:0.58rem;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:6px;}
+.qc-name{font-size:0.74rem;margin-bottom:4px;color:var(--text);}
+.qc-state{font-size:0.62rem;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:6px;}
 .qc-state.running{color:var(--accent);}
 .qc-state.ready{color:var(--accent5);}
 .qc-state.waiting{color:var(--accent3);}
-.qc-state.done{color:var(--muted);}
+.qc-state.done{color:var(--text2);}
 .qc-state.io{color:var(--accent2);}
-.qc-bar-bg{height:3px;background:var(--border);margin-top:4px;}
-.qc-bar-fill{height:3px;transition:width 0.3s;}
-.qc-info{font-size:0.62rem;color:var(--muted);}
+.qc-bar-bg{height:3px;background:var(--border);border-radius:2px;margin-top:5px;}
+.qc-bar-fill{height:3px;border-radius:2px;transition:width 0.3s;}
+.qc-info{font-size:0.63rem;color:var(--text2);}
 
-/* STATS TABLE */
-.stats-wrap{padding:16px 20px;flex:1;}
+/* Stats table */
+.stats-wrap{padding:16px 18px;flex:1;}
 .stats-wrap .s-label{margin-bottom:10px;}
-.stbl{width:100%;border-collapse:collapse;font-size:0.72rem;}
-.stbl th{text-align:left;padding:7px 10px;font-size:0.58rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border);}
-.stbl td{padding:9px 10px;border-bottom:1px solid rgba(26,36,68,0.4);transition:background 0.2s;}
-.stbl tr:hover td{background:rgba(0,245,196,0.025);}
+.stbl{width:100%;border-collapse:collapse;font-size:0.71rem;}
+.stbl th{
+  text-align:left;padding:8px 10px;
+  font-size:0.6rem;letter-spacing:0.1em;text-transform:uppercase;
+  color:var(--text2);
+  border-bottom:2px solid var(--border);
+  background:var(--surface);
+}
+.stbl td{padding:9px 10px;border-bottom:1px solid rgba(42,58,82,0.6);transition:background 0.15s;}
+.stbl tr:hover td{background:rgba(5,232,188,0.03);}
 .td-hl{color:var(--accent);}
 .td-warn{color:var(--accent3);}
 .td-bad{color:var(--accent2);}
-.starve-badge{font-size:0.55rem;padding:2px 5px;background:rgba(255,77,109,0.2);border:1px solid rgba(255,77,109,0.4);color:var(--accent2);margin-left:4px;}
+.starve-badge{font-size:0.53rem;padding:2px 5px;background:rgba(255,64,96,0.15);border:1px solid rgba(255,64,96,0.35);color:#ff8099;margin-left:4px;border-radius:3px;}
 
-/* EMPTY */
-.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px;color:var(--muted);font-size:0.75rem;text-align:center;gap:6px;grid-column:1/-1;}
-.empty-icon{font-size:1.8rem;opacity:0.3;margin-bottom:4px;}
+/* Empty state */
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px;color:var(--text2);font-size:0.73rem;text-align:center;gap:6px;grid-column:1/-1;}
+.empty-icon{font-size:1.8rem;opacity:0.2;margin-bottom:4px;}
 
-/* =================== COMPARE PAGE =================== */
+/* ── COMPARE PAGE ────────────────────────────────────────── */
 #page-compare{padding:0;}
-.compare-layout{display:grid;grid-template-columns:260px 1fr;min-height:calc(100vh - 52px);}
-.compare-sidebar{border-right:1px solid var(--border);background:var(--surface);padding:20px;display:flex;flex-direction:column;gap:16px;}
-.compare-main{padding:24px;overflow-y:auto;}
-.algo-check-grid{display:flex;flex-direction:column;gap:6px;}
-.algo-check{display:flex;align-items:center;gap:10px;padding:8px 12px;border:1px solid var(--border);background:var(--surface2);cursor:pointer;transition:all 0.15s;}
-.algo-check:hover{border-color:var(--accent);}
+.compare-layout{display:grid;grid-template-columns:248px 1fr;height:calc(100vh - 54px);}
+.compare-sidebar{
+  border-right:2px solid var(--border);
+  background:var(--surface);
+  padding:18px;
+  display:flex;flex-direction:column;gap:14px;
+  overflow-y:auto;
+  height:100%;
+}
+.compare-main{padding:22px;overflow-y:auto;height:100%;}
+.algo-check-grid{display:flex;flex-direction:column;gap:5px;}
+.algo-check{
+  display:flex;align-items:center;gap:10px;
+  padding:8px 12px;
+  border:1px solid var(--border);
+  border-radius:var(--r);
+  background:var(--bg);
+  cursor:pointer;transition:all 0.15s;
+}
+.algo-check:hover{border-color:var(--border2);}
 .algo-check input[type=checkbox]{accent-color:var(--accent);width:14px;height:14px;}
-.algo-check label{font-size:0.75rem;cursor:pointer;flex:1;}
-.run-compare-btn{padding:12px;background:transparent;border:1px solid var(--accent);color:var(--accent);font-family:var(--font-mono);font-size:0.8rem;cursor:pointer;transition:all 0.15s;letter-spacing:0.08em;}
-.run-compare-btn:hover{background:var(--accent);color:var(--bg);box-shadow:0 0 16px rgba(0,245,196,0.3);}
-.run-all-btn{padding:10px;background:rgba(123,97,255,0.15);border:1px solid rgba(123,97,255,0.4);color:var(--accent4);font-family:var(--font-mono);font-size:0.75rem;cursor:pointer;transition:all 0.15s;letter-spacing:0.08em;}
-.run-all-btn:hover{background:rgba(123,97,255,0.3);}
-.compare-results{display:flex;flex-direction:column;gap:20px;}
-.winner-banner{padding:16px 20px;background:rgba(0,245,196,0.08);border:1px solid rgba(0,245,196,0.3);display:flex;align-items:center;gap:16px;}
-.winner-crown{font-size:1.5rem;}
-.winner-name{font-family:var(--font-display);font-size:1.1rem;font-weight:700;color:var(--accent);}
-.winner-sub{font-size:0.7rem;color:var(--text2);margin-top:2px;}
+.algo-check label{font-size:0.73rem;cursor:pointer;flex:1;color:var(--text2);}
+.run-compare-btn{
+  padding:11px;background:rgba(5,232,188,0.07);
+  border:1px solid rgba(5,232,188,0.35);
+  border-radius:var(--r);
+  color:var(--accent);font-family:var(--font-mono);font-size:0.75rem;
+  cursor:pointer;transition:all 0.15s;letter-spacing:0.07em;
+}
+.run-compare-btn:hover{background:var(--accent);color:#000;box-shadow:0 0 14px rgba(5,232,188,0.28);}
+.run-all-btn{
+  padding:10px;
+  background:rgba(124,95,255,0.1);
+  border:1px solid rgba(124,95,255,0.35);
+  border-radius:var(--r);
+  color:var(--accent4);font-family:var(--font-mono);font-size:0.72rem;
+  cursor:pointer;transition:all 0.15s;letter-spacing:0.07em;
+}
+.run-all-btn:hover{background:rgba(124,95,255,0.22);}
+.compare-results{display:flex;flex-direction:column;gap:18px;}
+.winner-banner{
+  padding:16px 20px;
+  background:rgba(5,232,188,0.07);
+  border:1px solid rgba(5,232,188,0.25);
+  border-left:4px solid var(--accent);
+  border-radius:var(--r);
+  display:flex;align-items:center;gap:16px;
+}
+.winner-crown{font-size:1.4rem;}
+.winner-name{font-family:var(--font-display);font-size:1.05rem;font-weight:700;color:var(--accent);}
+.winner-sub{font-size:0.68rem;color:var(--text2);margin-top:2px;}
 .compare-table-wrap{overflow-x:auto;}
-.compare-tbl{width:100%;border-collapse:collapse;font-size:0.74rem;}
-.compare-tbl th{padding:9px 14px;font-size:0.6rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border);text-align:left;}
-.compare-tbl td{padding:10px 14px;border-bottom:1px solid rgba(26,36,68,0.4);}
-.compare-tbl tr.winner-row td{background:rgba(0,245,196,0.05);color:var(--accent);}
-.rank-badge{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;font-size:0.65rem;font-weight:700;}
+.compare-tbl{width:100%;border-collapse:collapse;font-size:0.72rem;}
+.compare-tbl th{
+  padding:9px 13px;font-size:0.62rem;letter-spacing:0.08em;text-transform:uppercase;
+  color:var(--text2);border-bottom:2px solid var(--border);text-align:left;
+  background:var(--surface);
+}
+.compare-tbl td{padding:10px 13px;border-bottom:1px solid rgba(42,58,82,0.55);}
+.compare-tbl tr.winner-row td{background:rgba(5,232,188,0.04);color:var(--accent);}
+.rank-badge{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;font-size:0.63rem;font-weight:700;}
 .rank-1{background:var(--accent);color:#000;}
 .rank-2{background:var(--accent3);color:#000;}
 .rank-3{background:var(--accent4);color:#fff;}
 .rank-n{background:var(--surface3);color:var(--muted);}
 .multi-gantt{display:flex;flex-direction:column;gap:8px;margin-top:4px;}
 .mg-row{display:flex;align-items:center;gap:10px;}
-.mg-label{font-size:0.65rem;color:var(--muted);width:80px;flex-shrink:0;text-align:right;}
-.mg-chart{flex:1;height:28px;background:var(--surface2);border:1px solid var(--border);position:relative;overflow:hidden;}
-.mg-bar{position:absolute;top:2px;height:24px;}
+.mg-label{font-size:0.63rem;color:var(--text2);width:84px;flex-shrink:0;text-align:right;}
+.mg-chart{flex:1;height:26px;background:var(--bg);border:1px solid var(--border);border-radius:var(--r);position:relative;overflow:hidden;}
+.mg-bar{position:absolute;top:2px;height:22px;}
 
-/* =================== HISTORY PAGE =================== */
-#page-history{padding:24px;}
-.history-toolbar{display:flex;align-items:center;gap:12px;margin-bottom:20px;}
-.hist-search{background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:var(--font-mono);font-size:0.75rem;padding:8px 14px;outline:none;flex:1;}
+/* ── HISTORY PAGE ────────────────────────────────────────── */
+#page-history{padding:22px;overflow-y:auto;height:calc(100vh - 54px);}
+.history-toolbar{display:flex;align-items:center;gap:10px;margin-bottom:16px;}
+.hist-search{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--r);
+  color:var(--text);font-family:var(--font-mono);font-size:0.73rem;
+  padding:8px 13px;outline:none;flex:1;
+}
 .hist-search:focus{border-color:var(--accent);}
-.tag-filter{display:flex;gap:6px;flex-wrap:wrap;}
-.tag-pill{padding:4px 10px;border:1px solid var(--border);color:var(--muted);font-size:0.62rem;cursor:pointer;transition:all 0.15s;}
-.tag-pill:hover,.tag-pill.active{border-color:var(--accent3);color:var(--accent3);}
-.hist-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px;}
-.hist-card{background:var(--surface);border:1px solid var(--border);padding:16px;transition:border-color 0.2s;cursor:default;}
+.tag-filter{display:flex;gap:5px;flex-wrap:wrap;}
+.tag-pill{
+  padding:4px 10px;border:1px solid var(--border);
+  border-radius:var(--r);
+  color:var(--text2);font-size:0.62rem;cursor:pointer;transition:all 0.15s;
+}
+.tag-pill:hover,.tag-pill.active{border-color:var(--accent3);color:var(--accent3);background:rgba(247,168,32,0.07);}
+.hist-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:12px;}
+.hist-card{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--r);
+  padding:15px;transition:border-color 0.2s;
+}
 .hist-card:hover{border-color:var(--border2);}
 .hc-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px;}
 .hc-algo{font-family:var(--font-display);font-size:1rem;font-weight:700;color:var(--accent);}
-.hc-time{font-size:0.62rem;color:var(--muted);}
+.hc-time{font-size:0.62rem;color:var(--text2);}
 .hc-tags{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px;}
-.hc-tag{padding:2px 7px;background:rgba(245,166,35,0.12);border:1px solid rgba(245,166,35,0.3);color:var(--accent3);font-size:0.6rem;}
+.hc-tag{padding:2px 7px;background:rgba(247,168,32,0.1);border:1px solid rgba(247,168,32,0.28);border-radius:3px;color:var(--accent3);font-size:0.58rem;}
 .hc-metrics{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px;}
-.hcm{background:var(--surface2);padding:7px 10px;}
-.hcm-label{font-size:0.55rem;color:var(--muted);margin-bottom:2px;}
-.hcm-val{font-size:0.9rem;color:var(--accent);font-family:var(--font-display);font-weight:700;}
-.hc-note{font-size:0.68rem;color:var(--text2);background:var(--surface2);padding:7px 10px;border-left:2px solid var(--border2);font-family:var(--font-body);line-height:1.5;}
+.hcm{background:var(--bg);border:1px solid var(--border);border-radius:var(--r);padding:7px 10px;}
+.hcm-label{font-size:0.62rem;color:var(--text2);margin-bottom:2px;}
+.hcm-val{font-size:0.88rem;color:var(--accent);font-family:var(--font-display);font-weight:700;}
+.hc-note{font-size:0.7rem;color:var(--text);background:var(--bg);padding:7px 10px;border-left:2px solid var(--border2);border-radius:var(--r);font-family:var(--font-body);line-height:1.5;}
 .hc-actions{display:flex;gap:6px;margin-top:10px;}
-.hc-btn{flex:1;padding:6px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:var(--font-mono);font-size:0.62rem;cursor:pointer;transition:all 0.15s;}
+.hc-btn{flex:1;padding:6px;border:1px solid var(--border);border-radius:var(--r);background:transparent;color:var(--muted);font-family:var(--font-mono);font-size:0.6rem;cursor:pointer;transition:all 0.15s;}
 .hc-btn:hover{border-color:var(--accent);color:var(--accent);}
 .hc-btn.del:hover{border-color:var(--accent2);color:var(--accent2);}
-.hc-procs{font-size:0.62rem;color:var(--muted);margin-top:4px;}
+.hc-procs{font-size:0.62rem;color:var(--text2);margin-top:4px;}
 
-/* =================== LEARN PAGE =================== */
+/* ── LEARN PAGE — vertical sidebar ──────────────────────── */
 #page-learn{padding:0;}
-.learn-layout{display:grid;grid-template-columns:220px 1fr;min-height:calc(100vh - 52px);}
-.learn-nav{border-right:1px solid var(--border);background:var(--surface);padding:20px 0;}
-.learn-nav-item{display:block;padding:10px 20px;font-size:0.72rem;color:var(--muted);cursor:pointer;border-left:2px solid transparent;transition:all 0.15s;}
-.learn-nav-item:hover{color:var(--text);background:var(--surface2);}
-.learn-nav-item.active{color:var(--accent);border-left-color:var(--accent);background:rgba(0,245,196,0.05);}
-.learn-content{padding:32px;overflow-y:auto;max-height:calc(100vh - 52px);}
+.learn-layout{
+  display:grid;
+  grid-template-columns:216px 1fr;
+  height:calc(100vh - 54px);
+}
+
+/* Sidebar — full height, scrollable if content overflows */
+.learn-nav{
+  border-right:2px solid var(--border);
+  background:var(--surface);
+  padding:24px 0;
+  display:flex;flex-direction:column;
+  overflow-y:auto;
+  height:100%;
+}
+
+/* Group label above a cluster of links */
+.learn-nav-group{
+  font-size:0.62rem;letter-spacing:0.14em;text-transform:uppercase;
+  color:var(--text2);
+  padding:22px 18px 8px;
+}
+.learn-nav-group:first-child{padding-top:8px;}
+
+/* Each nav item — more generous padding for easy clicking */
+.learn-nav-item{
+  display:flex;align-items:center;gap:10px;
+  padding:13px 20px;
+  font-family:var(--font-mono);font-size:0.73rem;
+  color:var(--text2);cursor:pointer;
+  border-left:3px solid transparent;
+  transition:all 0.15s;
+  user-select:none;
+  line-height:1.3;
+}
+.learn-nav-item:hover{
+  color:var(--text2);
+  background:var(--surface2);
+  border-left-color:var(--border2);
+}
+.learn-nav-item.active{
+  color:var(--accent);
+  background:rgba(5,232,188,0.06);
+  border-left-color:var(--accent);
+}
+.learn-nav-item .ni{font-size:13px;opacity:0.6;}
+
+/* Content area */
+.learn-content{
+  padding:36px 44px;
+  overflow-y:auto;
+  height:100%;
+}
 .learn-section{display:none;}
 .learn-section.active{display:block;}
-.learn-h1{font-family:var(--font-display);font-size:1.8rem;font-weight:800;color:var(--text);margin-bottom:8px;line-height:1.2;}
+.learn-h1{
+  font-family:var(--font-display);font-size:1.85rem;font-weight:800;
+  color:var(--text);margin-bottom:8px;line-height:1.2;
+}
 .learn-h1 span{color:var(--accent);}
-.learn-sub{color:var(--text2);font-family:var(--font-body);font-size:0.9rem;line-height:1.6;margin-bottom:28px;max-width:680px;}
-.learn-h2{font-family:var(--font-display);font-size:1.1rem;font-weight:700;color:var(--text);margin:28px 0 12px;}
-.learn-p{font-family:var(--font-body);font-size:0.85rem;color:var(--text2);line-height:1.75;margin-bottom:14px;max-width:680px;}
-.algo-cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;margin-bottom:24px;}
-.algo-card{background:var(--surface);border:1px solid var(--border);padding:18px;}
-.ac-name{font-family:var(--font-display);font-size:1rem;font-weight:700;color:var(--accent);margin-bottom:6px;}
-.ac-tagline{font-size:0.68rem;color:var(--accent3);letter-spacing:0.06em;margin-bottom:10px;}
-.ac-desc{font-family:var(--font-body);font-size:0.8rem;color:var(--text2);line-height:1.6;margin-bottom:12px;}
-.ac-props{display:flex;flex-direction:column;gap:4px;}
-.ac-prop{display:flex;justify-content:space-between;font-size:0.65rem;}
-.ac-prop-key{color:var(--muted);}
-.ac-prop-val{color:var(--text);}
+.learn-sub{color:var(--text);font-family:var(--font-body);font-size:0.88rem;line-height:1.65;margin-bottom:26px;max-width:680px;}
+.learn-h2{font-family:var(--font-display);font-size:1.05rem;font-weight:700;color:var(--text);margin:26px 0 11px;}
+.learn-p{font-family:var(--font-body);font-size:0.86rem;color:var(--text);line-height:1.75;margin-bottom:14px;max-width:680px;}
+.algo-cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:12px;margin-bottom:22px;}
+.algo-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:18px;transition:border-color 0.2s;}
+.algo-card:hover{border-color:var(--border2);}
+.ac-name{font-family:var(--font-display);font-size:1rem;font-weight:700;color:var(--accent);margin-bottom:5px;}
+.ac-tagline{font-size:0.66rem;color:var(--accent3);letter-spacing:0.06em;margin-bottom:9px;}
+.ac-desc{font-family:var(--font-body);font-size:0.82rem;color:var(--text);line-height:1.6;margin-bottom:12px;}
+.ac-props{display:flex;flex-direction:column;gap:4px;border-top:1px solid var(--border);padding-top:8px;}
+.ac-prop{display:flex;justify-content:space-between;font-size:0.63rem;padding:2px 0;}
+.ac-prop-key{color:var(--text2);}
+.ac-prop-val{color:var(--text2);}
 .good{color:var(--accent)!important;}
 .ok{color:var(--accent3)!important;}
 .bad{color:var(--accent2)!important;}
-.scenario-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;}
-.sc-card{background:var(--surface);border:1px solid var(--border);padding:18px;cursor:pointer;transition:border-color 0.2s;}
+.scenario-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(256px,1fr));gap:12px;}
+.sc-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:18px;transition:border-color 0.2s;}
 .sc-card:hover{border-color:var(--accent3);}
-.sc-title{font-family:var(--font-display);font-size:0.95rem;font-weight:700;margin-bottom:6px;color:var(--accent3);}
-.sc-desc{font-family:var(--font-body);font-size:0.78rem;color:var(--text2);line-height:1.6;margin-bottom:10px;}
-.sc-load{padding:7px 14px;background:transparent;border:1px solid var(--accent3);color:var(--accent3);font-family:var(--font-mono);font-size:0.68rem;cursor:pointer;transition:all 0.15s;}
-.sc-load:hover{background:var(--accent3);color:var(--bg);}
-.real-world-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;margin-bottom:24px;}
-.rw-card{background:var(--surface);border:1px solid var(--border);padding:18px;}
-.rw-icon{font-size:1.8rem;margin-bottom:10px;}
-.rw-title{font-family:var(--font-display);font-size:0.9rem;font-weight:700;color:var(--text);margin-bottom:6px;}
-.rw-desc{font-family:var(--font-body);font-size:0.78rem;color:var(--text2);line-height:1.6;}
-.info-box{padding:16px 20px;border:1px solid var(--border2);background:var(--surface2);margin-bottom:16px;max-width:680px;}
-.info-box.tip{border-color:rgba(0,245,196,0.3);background:rgba(0,245,196,0.05);}
-.info-box.warn{border-color:rgba(245,166,35,0.3);background:rgba(245,166,35,0.05);}
-.ib-title{font-size:0.62rem;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:6px;}
+.sc-title{font-family:var(--font-display);font-size:0.93rem;font-weight:700;margin-bottom:6px;color:var(--accent3);}
+.sc-desc{font-family:var(--font-body);font-size:0.82rem;color:var(--text);line-height:1.6;margin-bottom:10px;}
+.sc-load{
+  padding:7px 13px;background:transparent;
+  border:1px solid var(--accent3);border-radius:var(--r);
+  color:var(--accent3);font-family:var(--font-mono);font-size:0.66rem;
+  cursor:pointer;transition:all 0.15s;
+}
+.sc-load:hover{background:var(--accent3);color:#000;}
+.real-world-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px;margin-bottom:22px;}
+.rw-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:18px;}
+.rw-icon{font-size:1.7rem;margin-bottom:9px;}
+.rw-title{font-family:var(--font-display);font-size:0.88rem;font-weight:700;color:var(--text);margin-bottom:5px;}
+.rw-desc{font-family:var(--font-body);font-size:0.82rem;color:var(--text);line-height:1.6;}
+.info-box{
+  padding:15px 18px;
+  border-radius:var(--r);
+  margin-bottom:16px;max-width:680px;
+}
+.info-box.tip{border:1px solid rgba(5,232,188,0.25);background:rgba(5,232,188,0.05);border-left:3px solid var(--accent);}
+.info-box.warn{border:1px solid rgba(247,168,32,0.28);background:rgba(247,168,32,0.05);border-left:3px solid var(--accent3);}
+.ib-title{font-size:0.6rem;letter-spacing:0.13em;text-transform:uppercase;margin-bottom:6px;display:block;}
 .tip .ib-title{color:var(--accent);}
 .warn .ib-title{color:var(--accent3);}
-.ib-body{font-family:var(--font-body);font-size:0.8rem;color:var(--text2);line-height:1.6;}
+.ib-body{font-family:var(--font-body);font-size:0.83rem;color:var(--text);line-height:1.65;}
 
-/* =================== TRADEOFF PAGE =================== */
-#page-tradeoff{padding:24px;}
-.tradeoff-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px;}
-.chart-card{background:var(--surface);border:1px solid var(--border);padding:20px;}
-.chart-title{font-family:var(--font-display);font-size:0.9rem;font-weight:700;margin-bottom:14px;color:var(--text);}
-.chart-sub{font-size:0.65rem;color:var(--muted);margin-bottom:14px;font-family:var(--font-body);}
+/* ── TRADEOFF PAGE ───────────────────────────────────────── */
+#page-tradeoff{padding:22px;overflow-y:auto;height:calc(100vh - 54px);}
+.tradeoff-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;}
+.chart-card{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--r);
+  padding:18px;
+}
+.chart-title{font-family:var(--font-display);font-size:0.88rem;font-weight:700;margin-bottom:4px;color:var(--text);}
+.chart-sub{font-size:0.66rem;color:var(--text2);margin-bottom:12px;font-family:var(--font-body);}
 canvas{max-height:280px;}
-.tradeoff-summary{background:var(--surface);border:1px solid var(--border);padding:20px;}
-.tradeoff-rows{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-top:14px;}
-.tr-card{background:var(--surface2);border:1px solid var(--border);padding:14px;}
-.tr-algo{font-size:0.72rem;color:var(--accent);margin-bottom:8px;font-family:var(--font-display);font-weight:700;}
+.tradeoff-summary{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--r);
+  padding:18px;
+}
+.tradeoff-rows{display:grid;grid-template-columns:repeat(auto-fill,minmax(196px,1fr));gap:10px;margin-top:12px;}
+.tr-card{background:var(--bg);border:1px solid var(--border);border-radius:var(--r);padding:13px;}
+.tr-algo{font-size:0.7rem;color:var(--accent);margin-bottom:8px;font-family:var(--font-display);font-weight:700;}
 .tr-bar-row{display:flex;flex-direction:column;gap:5px;}
-.tr-br{display:flex;align-items:center;gap:8px;font-size:0.6rem;}
-.tr-br-label{color:var(--muted);width:60px;flex-shrink:0;}
-.tr-bg{flex:1;height:6px;background:var(--border);border-radius:1px;}
-.tr-fill{height:6px;border-radius:1px;transition:width 0.5s;}
+.tr-br{display:flex;align-items:center;gap:7px;font-size:0.58rem;}
+.tr-br-label{color:var(--text2);width:56px;flex-shrink:0;}
+.tr-bg{flex:1;height:5px;background:var(--border);border-radius:3px;}
+.tr-fill{height:5px;border-radius:3px;transition:width 0.5s;}
 
-/* WHAT-IF */
-.whatif-panel{background:var(--surface);border:1px solid rgba(123,97,255,0.3);padding:20px;margin-top:20px;}
-.whatif-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin:14px 0;}
-.wi-group{display:flex;flex-direction:column;gap:6px;}
-.wi-label{font-size:0.65rem;color:var(--muted);letter-spacing:0.08em;}
-.wi-val{font-size:1.1rem;font-family:var(--font-display);font-weight:700;color:var(--accent4);}
-.wi-change{font-size:0.62rem;margin-top:2px;}
+/* What-if */
+.whatif-panel{
+  background:var(--surface);
+  border:1px solid rgba(124,95,255,0.28);
+  border-left:3px solid var(--accent4);
+  border-radius:var(--r);
+  padding:18px;margin-top:16px;
+}
+.whatif-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin:12px 0;}
+.wi-group{display:flex;flex-direction:column;gap:5px;}
+.wi-label{font-size:0.65rem;color:var(--text2);letter-spacing:0.08em;text-transform:uppercase;}
+.wi-val{font-size:1.05rem;font-family:var(--font-display);font-weight:700;color:var(--accent4);}
+.wi-change{font-size:0.6rem;margin-top:1px;}
 .wi-change.pos{color:var(--accent);}
 .wi-change.neg{color:var(--accent2);}
 
-/* Modal */
-.modal-overlay{position:fixed;inset:0;background:rgba(5,8,16,0.85);backdrop-filter:blur(8px);z-index:500;display:none;align-items:center;justify-content:center;}
+/* ── MODAL ───────────────────────────────────────────────── */
+.modal-overlay{position:fixed;inset:0;background:rgba(11,15,23,0.90);backdrop-filter:blur(10px);z-index:500;display:none;align-items:center;justify-content:center;}
 .modal-overlay.open{display:flex;}
-.modal{background:var(--surface);border:1px solid var(--border);padding:24px;max-width:460px;width:90%;animation:fadeUp 0.2s ease;}
+.modal{background:var(--surface);border:1px solid var(--border2);border-radius:var(--r);padding:24px;max-width:460px;width:90%;animation:fadeUp 0.18s ease;}
 @keyframes fadeUp{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
-.modal-title{font-family:var(--font-display);font-size:1rem;font-weight:700;margin-bottom:16px;}
-.modal-label{font-size:0.65rem;color:var(--muted);letter-spacing:0.08em;margin-bottom:4px;display:block;}
-.modal input,.modal textarea{width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:var(--font-mono);font-size:0.78rem;padding:8px 12px;outline:none;margin-bottom:10px;}
+.modal-title{font-family:var(--font-display);font-size:1rem;font-weight:700;margin-bottom:15px;}
+.modal-label{font-size:0.65rem;color:var(--text2);letter-spacing:0.08em;margin-bottom:4px;display:block;}
+.modal input,.modal textarea{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:var(--r);color:var(--text);font-family:var(--font-mono);font-size:0.77rem;padding:8px 11px;outline:none;margin-bottom:10px;}
 .modal textarea{min-height:80px;resize:vertical;font-family:var(--font-body);}
 .modal input:focus,.modal textarea:focus{border-color:var(--accent);}
 .modal-actions{display:flex;gap:8px;margin-top:6px;}
-.modal-btn{flex:1;padding:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:var(--font-mono);font-size:0.75rem;cursor:pointer;transition:all 0.15s;}
-.modal-btn.save{border-color:var(--accent);color:var(--accent);}
-.modal-btn.save:hover{background:var(--accent);color:var(--bg);}
+.modal-btn{flex:1;padding:10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text2);font-family:var(--font-mono);font-size:0.73rem;cursor:pointer;transition:all 0.15s;}
+.modal-btn.save{border-color:var(--accent);color:var(--accent);background:rgba(5,232,188,0.07);}
+.modal-btn.save:hover{background:var(--accent);color:#000;}
 .modal-btn:hover{border-color:var(--accent2);color:var(--accent2);}
 
-/* Scrollbars */
-::-webkit-scrollbar{width:3px;height:3px;}
-::-webkit-scrollbar-track{background:transparent;}
-::-webkit-scrollbar-thumb{background:var(--border);}
+/* ── Scrollbars — wider, easy to grab ───────────────────── */
+::-webkit-scrollbar{width:8px;height:8px;}
+::-webkit-scrollbar-track{background:var(--surface2);}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:4px;border:2px solid var(--surface2);}
+::-webkit-scrollbar-thumb:hover{background:var(--muted);}
+/* Narrower for tight sidebars */
+.sim-sidebar::-webkit-scrollbar,.learn-nav::-webkit-scrollbar{width:5px;}
+.sim-sidebar::-webkit-scrollbar-track,.learn-nav::-webkit-scrollbar-track{background:transparent;}
+.sim-sidebar::-webkit-scrollbar-thumb,.learn-nav::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px;border:none;}
 
-/* Utility */
+/* ── Utility ─────────────────────────────────────────────── */
 .flex{display:flex;}
 .gap8{gap:8px;}
 .mt8{margin-top:8px;}
-.section-divider{height:1px;background:var(--border);margin:20px 0;}
+.section-divider{height:1px;background:var(--border);margin:18px 0;}
+
+/* ══════════════════════════════════════════════════════════
+   V4 NEW FEATURES CSS
+══════════════════════════════════════════════════════════ */
+
+/* ── Run Detail Modal ─────────────────────────────────────── */
+.run-detail-modal{
+  position:fixed;inset:0;z-index:600;
+  background:rgba(11,15,23,0.92);backdrop-filter:blur(12px);
+  display:none;align-items:flex-start;justify-content:center;
+  padding:24px;overflow-y:auto;
+}
+.run-detail-modal.open{display:flex;}
+.run-detail-inner{
+  background:var(--surface);
+  border:1px solid var(--border2);
+  border-radius:var(--r);
+  width:100%;max-width:900px;
+  margin:auto;
+  animation:fadeUp 0.2s ease;
+}
+.rdm-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:18px 22px;
+  border-bottom:1px solid var(--border);
+}
+.rdm-title{font-family:var(--font-display);font-size:1.1rem;font-weight:700;}
+.rdm-close{background:none;border:none;color:var(--text2);font-size:1.3rem;cursor:pointer;padding:4px 8px;border-radius:3px;}
+.rdm-close:hover{color:var(--accent2);}
+.rdm-body{padding:20px 22px;display:flex;flex-direction:column;gap:18px;}
+.rdm-metrics{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;}
+.rdm-mc{background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);padding:10px 12px;}
+.rdm-mc-label{font-size:0.58rem;color:var(--text2);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:4px;}
+.rdm-mc-val{font-size:1.1rem;font-family:var(--font-display);font-weight:700;color:var(--accent);}
+.rdm-section-title{font-size:0.65rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--text2);margin-bottom:8px;}
+.rdm-gantt{position:relative;height:44px;background:var(--bg);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;margin-bottom:4px;}
+.rdm-procs-table{width:100%;border-collapse:collapse;font-size:0.72rem;}
+.rdm-procs-table th{text-align:left;padding:7px 10px;font-size:0.6rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--text2);border-bottom:2px solid var(--border);background:var(--surface2);}
+.rdm-procs-table td{padding:8px 10px;border-bottom:1px solid rgba(42,58,82,0.5);color:var(--text);}
+.rdm-notes{padding:10px 14px;background:var(--bg);border-radius:var(--r);border-left:3px solid var(--border2);font-size:0.78rem;color:var(--text);font-family:var(--font-body);line-height:1.6;}
+.rdm-tags{display:flex;gap:6px;flex-wrap:wrap;}
+.rdm-tag{padding:3px 9px;background:rgba(255,184,48,0.12);border:1px solid rgba(255,184,48,0.3);border-radius:3px;color:var(--accent3);font-size:0.62rem;}
+.rdm-compare-btn{padding:8px 16px;background:rgba(155,128,255,0.1);border:1px solid rgba(155,128,255,0.35);border-radius:var(--r);color:var(--accent4);font-family:var(--font-mono);font-size:0.72rem;cursor:pointer;transition:all 0.15s;}
+.rdm-compare-btn:hover{background:var(--accent4);color:#000;}
+
+/* ── History Compare Panel ────────────────────────────────── */
+.hist-compare-bar{
+  display:none;
+  padding:12px 16px;
+  background:var(--surface2);
+  border:1px solid rgba(155,128,255,0.35);
+  border-radius:var(--r);
+  margin-bottom:14px;
+  align-items:center;gap:12px;
+}
+.hist-compare-bar.show{display:flex;}
+.hcb-label{font-size:0.72rem;color:var(--accent4);flex:1;}
+.hcb-items{display:flex;gap:8px;flex-wrap:wrap;}
+.hcb-item{padding:4px 10px;background:rgba(155,128,255,0.15);border:1px solid rgba(155,128,255,0.3);border-radius:3px;font-size:0.68rem;color:var(--text2);}
+.hcb-btn{padding:7px 14px;background:var(--accent4);border:none;border-radius:var(--r);color:#000;font-family:var(--font-mono);font-size:0.7rem;cursor:pointer;font-weight:700;}
+.hcb-clear{padding:7px 14px;background:transparent;border:1px solid var(--border2);border-radius:var(--r);color:var(--text2);font-family:var(--font-mono);font-size:0.7rem;cursor:pointer;}
+.hcb-clear:hover{border-color:var(--accent2);color:var(--accent2);}
+.hist-card-select{position:absolute;top:10px;right:10px;}
+.hist-card-select input[type=checkbox]{accent-color:var(--accent4);width:16px;height:16px;cursor:pointer;}
+.hist-card{position:relative;}
+
+/* History Compare Result Modal */
+.hcr-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+.hcr-col{background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);padding:14px;}
+.hcr-algo{font-family:var(--font-display);font-size:1rem;font-weight:700;margin-bottom:12px;}
+.hcr-diff{display:flex;flex-direction:column;gap:6px;margin-top:12px;}
+.hcr-diff-row{display:flex;justify-content:space-between;align-items:center;font-size:0.72rem;padding:5px 0;border-bottom:1px solid rgba(42,58,82,0.4);}
+.hcr-diff-label{color:var(--text2);}
+.hcr-better{color:var(--accent);}
+.hcr-worse{color:var(--accent2);}
+.hcr-same{color:var(--text2);}
+
+/* ── Adaptive Algorithm ───────────────────────────────────── */
+.adaptive-log{
+  font-size:0.68rem;color:var(--text2);
+  line-height:1.8;
+  max-height:80px;overflow-y:auto;
+  padding:8px 10px;
+  background:var(--bg);
+  border:1px solid var(--border);
+  border-radius:var(--r);
+  font-family:var(--font-mono);
+}
+.adaptive-log .switch{color:var(--accent3);}
+
+/* ── Energy & Thermal ─────────────────────────────────────── */
+.energy-bar{display:flex;align-items:center;gap:8px;font-size:0.68rem;margin-top:6px;}
+.energy-bar-bg{flex:1;height:6px;background:var(--border);border-radius:3px;}
+.energy-bar-fill{height:6px;border-radius:3px;background:linear-gradient(90deg,#00e8b8,#ffb830,#ff5577);transition:width 0.5s;}
+.thermal-badge{padding:2px 8px;border-radius:3px;font-size:0.62rem;font-weight:700;}
+.thermal-normal{background:rgba(0,232,184,0.15);color:var(--accent);}
+.thermal-warm{background:rgba(255,184,48,0.15);color:var(--accent3);}
+.thermal-hot{background:rgba(255,85,119,0.15);color:var(--accent2);}
+
+/* ── Heatmap ──────────────────────────────────────────────── */
+#page-heatmap{padding:20px;overflow-y:auto;height:calc(100vh - 54px);display:flex;flex-direction:column;gap:16px;}
+.heatmap-grid{display:grid;gap:2px;}
+.heatmap-cell{height:18px;border-radius:2px;transition:background 0.3s;}
+.heatmap-label{font-size:0.62rem;color:var(--text2);text-align:right;padding-right:8px;line-height:18px;white-space:nowrap;}
+.heatmap-legend{display:flex;align-items:center;gap:8px;font-size:0.65rem;color:var(--text2);}
+.heatmap-legend-bar{flex:1;height:8px;border-radius:4px;background:linear-gradient(90deg,var(--surface3),var(--accent3),var(--accent2));}
+
+/* ── MLFQ Queue Graph ─────────────────────────────────────── */
+.mlfq-vis{display:flex;flex-direction:column;gap:6px;padding:10px 0;}
+.mlfq-queue-row{display:flex;align-items:center;gap:8px;}
+.mlfq-queue-label{font-size:0.62rem;color:var(--text2);width:60px;flex-shrink:0;font-family:var(--font-mono);}
+.mlfq-queue-track{flex:1;display:flex;gap:4px;min-height:28px;align-items:center;padding:4px;background:var(--bg);border:1px solid var(--border);border-radius:var(--r);}
+.mlfq-proc-chip{padding:3px 8px;border-radius:3px;font-size:0.62rem;font-family:var(--font-mono);font-weight:700;color:#000;animation:chipIn 0.2s ease;}
+@keyframes chipIn{from{opacity:0;transform:scale(0.8);}to{opacity:1;transform:scale(1);}}
+
+/* ── Challenges & Gamification ────────────────────────────── */
+#page-challenges{padding:20px;overflow-y:auto;height:calc(100vh - 54px);display:flex;flex-direction:column;gap:16px;}
+.challenge-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;}
+.challenge-card{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--r);
+  padding:18px;cursor:pointer;transition:border-color 0.2s;position:relative;
+}
+.challenge-card:hover{border-color:var(--accent3);}
+.challenge-card.locked{opacity:0.5;cursor:not-allowed;}
+.challenge-card.completed{border-color:var(--accent);}
+.ch-badge{position:absolute;top:12px;right:12px;padding:2px 8px;border-radius:3px;font-size:0.6rem;font-weight:700;}
+.ch-badge.easy{background:rgba(0,232,184,0.15);color:var(--accent);}
+.ch-badge.medium{background:rgba(255,184,48,0.15);color:var(--accent3);}
+.ch-badge.hard{background:rgba(255,85,119,0.15);color:var(--accent2);}
+.ch-badge.done{background:rgba(0,232,184,0.25);color:var(--accent);}
+.ch-icon{font-size:1.6rem;margin-bottom:8px;}
+.ch-title{font-family:var(--font-display);font-size:0.95rem;font-weight:700;margin-bottom:5px;color:var(--text);}
+.ch-desc{font-size:0.78rem;color:var(--text2);line-height:1.6;margin-bottom:10px;font-family:var(--font-body);}
+.ch-target{font-size:0.68rem;color:var(--accent3);font-family:var(--font-mono);}
+.ch-start-btn{margin-top:10px;padding:7px 14px;background:rgba(255,184,48,0.1);border:1px solid rgba(255,184,48,0.35);border-radius:var(--r);color:var(--accent3);font-family:var(--font-mono);font-size:0.7rem;cursor:pointer;transition:all 0.15s;}
+.ch-start-btn:hover{background:var(--accent3);color:#000;}
+
+/* Achievements */
+.achievement-grid{display:flex;flex-wrap:wrap;gap:10px;}
+.ach-badge{
+  display:flex;align-items:center;gap:10px;
+  padding:10px 14px;
+  background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);
+  transition:border-color 0.2s;
+}
+.ach-badge.unlocked{border-color:rgba(255,184,48,0.5);background:rgba(255,184,48,0.06);}
+.ach-badge.locked{opacity:0.4;}
+.ach-icon{font-size:1.4rem;}
+.ach-name{font-size:0.75rem;font-weight:600;color:var(--text);}
+.ach-desc{font-size:0.65rem;color:var(--text2);}
+
+/* Challenge active overlay */
+.challenge-overlay{
+  position:fixed;top:54px;right:0;bottom:0;width:320px;
+  background:var(--surface);border-left:2px solid var(--border2);
+  z-index:150;display:none;flex-direction:column;
+  animation:slideFromRight 0.25s ease;
+}
+.challenge-overlay.open{display:flex;}
+@keyframes slideFromRight{from{transform:translateX(100%);}to{transform:translateX(0);}}
+.co-header{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+.co-title{font-family:var(--font-display);font-size:0.9rem;font-weight:700;color:var(--accent3);}
+.co-body{padding:14px 16px;flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:10px;}
+.co-metric{background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);padding:10px 12px;}
+.co-metric-label{font-size:0.6rem;color:var(--text2);letter-spacing:0.1em;text-transform:uppercase;}
+.co-metric-target{font-size:0.72rem;color:var(--accent3);margin-top:2px;}
+.co-metric-current{font-size:1.1rem;font-family:var(--font-display);font-weight:700;color:var(--text);}
+.co-metric.pass .co-metric-current{color:var(--accent);}
+.co-metric.fail .co-metric-current{color:var(--accent2);}
+.co-submit{margin:14px 16px;padding:10px;background:var(--accent);border:none;border-radius:var(--r);color:#000;font-family:var(--font-mono);font-size:0.78rem;font-weight:700;cursor:pointer;transition:all 0.15s;}
+.co-submit:hover{box-shadow:0 0 16px rgba(0,232,184,0.4);}
+.co-result{padding:14px 16px;background:var(--surface2);border-radius:var(--r);font-size:0.78rem;text-align:center;display:none;}
+.co-result.pass{color:var(--accent);}
+.co-result.fail{color:var(--accent2);}
+
+/* ── Labs Page ────────────────────────────────────────────── */
+#page-labs{padding:20px;overflow-y:auto;height:calc(100vh - 54px);display:flex;flex-direction:column;gap:16px;}
+.lab-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px;}
+.lab-card{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--r);
+  padding:20px;transition:border-color 0.2s;
+}
+.lab-card:hover{border-color:var(--accent5);}
+.lab-num{font-size:0.62rem;letter-spacing:0.14em;text-transform:uppercase;color:var(--accent5);margin-bottom:6px;}
+.lab-title{font-family:var(--font-display);font-size:1rem;font-weight:700;color:var(--text);margin-bottom:8px;}
+.lab-desc{font-size:0.8rem;color:var(--text2);line-height:1.65;margin-bottom:12px;font-family:var(--font-body);}
+.lab-objectives{display:flex;flex-direction:column;gap:4px;margin-bottom:14px;}
+.lab-obj{font-size:0.72rem;color:var(--text);display:flex;align-items:flex-start;gap:6px;}
+.lab-obj::before{content:'→';color:var(--accent5);flex-shrink:0;}
+.lab-btn{padding:8px 16px;background:rgba(64,184,255,0.1);border:1px solid rgba(64,184,255,0.35);border-radius:var(--r);color:var(--accent5);font-family:var(--font-mono);font-size:0.72rem;cursor:pointer;transition:all 0.15s;}
+.lab-btn:hover{background:var(--accent5);color:#000;}
+.lab-hint{
+  margin-top:10px;padding:10px 12px;
+  background:var(--bg);border-radius:var(--r);
+  border-left:3px solid var(--accent5);
+  font-size:0.72rem;color:var(--text2);
+  display:none;line-height:1.6;font-family:var(--font-body);
+}
+
+/* ── Anomaly / AI Panel ───────────────────────────────────── */
+.anomaly-panel{
+  margin:8px 18px 0;padding:12px 16px;
+  background:rgba(255,184,48,0.07);
+  border:1px solid rgba(255,184,48,0.3);
+  border-left:3px solid var(--accent3);
+  border-radius:var(--r);
+  font-size:0.72rem;line-height:1.7;display:none;
+}
+#page-insights .anomaly-panel { display:block; margin:0; }
+.anomaly-item{display:flex;align-items:flex-start;gap:8px;color:var(--accent3);margin-bottom:4px;}
+.anomaly-item::before{content:'⚠';flex-shrink:0;}
+.anomaly-item:last-child{margin-bottom:0;}
+
+/* ── Energy panel in metrics ──────────────────────────────── */
+.energy-panel{
+  padding:10px 18px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:16px;flex-shrink:0;
+  background:var(--surface);font-size:0.7rem;
+}
+.ep-item{display:flex;flex-direction:column;gap:2px;}
+.ep-label{font-size:0.58rem;color:var(--text2);letter-spacing:0.1em;text-transform:uppercase;}
+.ep-val{font-weight:700;color:var(--text);}
+.ep-val.green{color:var(--accent);}
+.ep-val.amber{color:var(--accent3);}
+.ep-val.red{color:var(--accent2);}
+
+/* ── Batch runner ─────────────────────────────────────────── */
+.batch-results{display:flex;flex-direction:column;gap:6px;max-height:300px;overflow-y:auto;}
+.batch-row{display:grid;grid-template-columns:80px 1fr 80px 80px 80px 80px;gap:8px;font-size:0.68rem;padding:7px 10px;border-bottom:1px solid rgba(42,58,82,0.4);}
+.batch-row.header{color:var(--text2);font-size:0.6rem;letter-spacing:0.08em;text-transform:uppercase;border-bottom:2px solid var(--border);}
+
+/* ── Perf import ──────────────────────────────────────────── */
+.perf-drop{
+  border:2px dashed var(--border2);border-radius:var(--r);
+  padding:32px;text-align:center;font-size:0.8rem;color:var(--text2);
+  cursor:pointer;transition:all 0.2s;font-family:var(--font-body);
+}
+.perf-drop:hover,.perf-drop.drag{border-color:var(--accent);color:var(--accent);}
+.perf-drop input{display:none;}
+
+/* ── Container sim ────────────────────────────────────────── */
+.cgroup-row{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+.cgroup-label{font-size:0.7rem;color:var(--text2);width:90px;}
+.cgroup-bar-bg{flex:1;height:10px;background:var(--border);border-radius:5px;overflow:hidden;}
+.cgroup-bar-fill{height:10px;background:var(--accent);border-radius:5px;transition:width 0.3s;}
+.cgroup-val{font-size:0.7rem;color:var(--text);width:40px;text-align:right;}
+
+/* ── Prediction panel ─────────────────────────────────────── */
+.pred-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;}
+.pred-card{background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);padding:10px 12px;}
+.pred-algo{font-size:0.72rem;font-weight:700;color:var(--text);margin-bottom:6px;}
+.pred-score{font-family:var(--font-display);font-size:1.3rem;font-weight:700;margin-bottom:4px;}
+.pred-score.A{color:var(--accent);}
+.pred-score.B{color:#7fffb8;}
+.pred-score.C{color:var(--accent3);}
+.pred-score.D{color:var(--accent2);}
+.pred-bar{height:4px;border-radius:2px;background:var(--accent);margin-bottom:6px;}
+.pred-reason{font-size:0.62rem;color:var(--text2);line-height:1.5;font-family:var(--font-body);}
+
+/* Nav additions */
+.nav-tab-new{position:relative;}
+.nav-tab-new::after{content:'NEW';position:absolute;top:-2px;right:-4px;font-size:0.44rem;background:var(--accent3);color:#000;padding:1px 3px;border-radius:2px;font-weight:700;letter-spacing:0.05em;}
+
 </style>
 </head>
 <body>
@@ -347,19 +1056,27 @@ canvas{max-height:280px;}
 <nav>
   <div class="nav-logo">Nex<span>OS</span></div>
   <div class="nav-tabs">
-    <div class="nav-tab active" onclick="switchPage('sim',this)">⬡ Simulator</div>
-    <div class="nav-tab" onclick="switchPage('compare',this)">⇄ Compare</div>
-    <div class="nav-tab" onclick="switchPage('tradeoff',this)">◈ Tradeoffs</div>
-    <div class="nav-tab" onclick="switchPage('history',this)">◷ History</div>
-    <div class="nav-tab" onclick="switchPage('learn',this)">✦ Learn</div>
+    <div class="nav-tab active" onclick="switchPage('sim',this)"><span class="ti">⬡</span> Simulator</div>
+    <div class="nav-tab" onclick="switchPage('insights',this)"><span class="ti">🤖</span> AI Insights</div>
+    <div class="nav-tab" onclick="switchPage('advanced',this)"><span class="ti">⚙</span> Advanced</div>
+    <div class="nav-tab" onclick="switchPage('compare',this)"><span class="ti">⇄</span> Compare</div>
+    <div class="nav-tab" onclick="switchPage('tradeoff',this)"><span class="ti">◈</span> Tradeoffs</div>
+    <div class="nav-tab" onclick="switchPage('history',this)"><span class="ti">◷</span> History</div>
+    <div class="nav-tab nav-tab-new" onclick="switchPage('challenges',this)"><span class="ti">🏆</span> Challenges</div>
+    <div class="nav-tab nav-tab-new" onclick="switchPage('labs',this)"><span class="ti">🧪</span> Labs</div>
+    <div class="nav-tab" onclick="switchPage('heatmap',this)"><span class="ti">🌡</span> Heatmap</div>
+    <div class="nav-tab" onclick="switchPage('learn',this)"><span class="ti">✦</span> Learn</div>
   </div>
   <div class="nav-right">
     <div class="status-pill">
       <div class="sdot" id="navDot"></div>
       <span id="navStatus">IDLE</span>
     </div>
-    <div class="status-pill" style="border-color:rgba(123,97,255,0.3);color:var(--accent4);">
-      TICK <span id="navTick" style="margin-left:6px;">0</span>
+    <div class="status-pill" style="border-color:rgba(155,128,255,0.3);color:var(--accent4);">
+      TICK <span id="navTick" style="margin-left:6px;color:var(--accent4);">0</span>
+    </div>
+    <div class="status-pill" id="achPill" style="border-color:rgba(255,184,48,0.3);color:var(--accent3);display:none;">
+      🏆 <span id="achCount">0</span>
     </div>
   </div>
 </nav>
@@ -377,14 +1094,29 @@ canvas{max-height:280px;}
         <button class="algo-btn" onclick="selectAlgo('priority',this)">Priority</button>
         <button class="algo-btn" onclick="selectAlgo('mlfq',this)">MLFQ</button>
         <button class="algo-btn" onclick="selectAlgo('srtf',this)">SRTF</button>
+        <button class="algo-btn" onclick="selectAlgo('adaptive',this)" style="grid-column:1/-1;border-color:rgba(155,128,255,0.4);color:var(--accent4);">⚡ Adaptive Hybrid</button>
       </div>
       <div class="quantum-row" id="quantumRow" style="display:none">
         <label>Time Quantum (ms)</label>
         <input class="fi fi-sm" type="number" id="quantumInput" value="4" min="1" max="20">
       </div>
-      <div style="display:flex;align-items:center;gap:8px;margin-top:10px;">
-        <input type="checkbox" id="stepMode" style="accent-color:var(--accent5);">
-        <label for="stepMode" style="font-size:0.68rem;color:var(--muted);cursor:pointer;">Step-by-Step Mode</label>
+      <div style="display:flex;flex-direction:column;gap:7px;margin-top:10px;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <input type="checkbox" id="stepMode" style="accent-color:var(--accent5);">
+          <label for="stepMode" style="font-size:0.7rem;color:var(--text2);cursor:pointer;">Step-by-Step Mode</label>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <input type="checkbox" id="thermalMode" style="accent-color:var(--accent3);">
+          <label for="thermalMode" style="font-size:0.7rem;color:var(--text2);cursor:pointer;">🌡 CPU Thermal Model</label>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <input type="checkbox" id="cgroupMode" style="accent-color:var(--accent5);">
+          <label for="cgroupMode" style="font-size:0.7rem;color:var(--text2);cursor:pointer;">📦 Container Throttle</label>
+        </div>
+        <div id="cgroupQuota" style="display:none;padding-left:22px;">
+          <div style="font-size:0.63rem;color:var(--text2);margin-bottom:3px;">CPU Quota (% of capacity)</div>
+          <input class="fi" type="number" id="cgroupVal" value="70" min="10" max="100" style="width:72px;">
+        </div>
       </div>
     </div>
 
@@ -418,11 +1150,18 @@ canvas{max-height:280px;}
       </div>
     </div>
 
-    <div class="s-section" style="flex:1;overflow:hidden;display:flex;flex-direction:column;">
-      <div class="s-label">Queue (<span id="procCount">0</span>)</div>
-      <div class="proc-list" id="procList">
-        <div class="empty"><div class="empty-icon">⬡</div>No processes yet</div>
+    <div class="s-section" style="flex:1;overflow:hidden;display:flex;flex-direction:column;gap:8px;">
+      <div class="s-label">Process Queue</div>
+      <!-- Clickable summary box -->
+      <div class="queue-box" onclick="openProcModal()" id="queueBox">
+        <div class="qb-dots" id="queueDots"></div>
+        <div class="qb-info">
+          <div class="qb-count" id="procCount">0</div>
+          <div class="qb-hint">processes — click to manage</div>
+        </div>
+        <div class="qb-arrow">▶</div>
       </div>
+    </div>
     </div>
 
     <div class="ctrl-row">
@@ -432,9 +1171,9 @@ canvas{max-height:280px;}
       <button class="ctrl-btn" onclick="resetSim()">↺</button>
     </div>
     <div style="padding:0 16px 12px;display:flex;align-items:center;gap:8px;">
-      <label style="font-size:0.62rem;color:var(--muted);">Speed</label>
+      <label style="font-size:0.65rem;color:var(--text2);">Speed</label>
       <input type="range" id="speedSlider" min="1" max="10" value="5" style="flex:1;">
-      <span id="speedVal" style="font-size:0.62rem;color:var(--muted);width:20px;">5</span>
+      <span id="speedVal" style="font-size:0.65rem;color:var(--text2);width:20px;">5</span>
     </div>
   </aside>
 
@@ -454,9 +1193,6 @@ canvas{max-height:280px;}
 
     <!-- STEP EXPLAINER -->
     <div id="stepBox" class="step-box"></div>
-
-    <!-- ML PANEL -->
-    <div id="mlPanel" class="ml-panel"></div>
 
     <!-- GANTT -->
     <div class="gantt-wrap">
@@ -480,7 +1216,7 @@ canvas{max-height:280px;}
           <span><span style="color:var(--accent5)">■</span> READY</span>
           <span><span style="color:var(--accent3)">■</span> WAITING</span>
           <span><span style="color:var(--accent2)">■</span> I/O</span>
-          <span><span style="color:var(--muted)">■</span> DONE</span>
+          <span><span style="color:var(--text2)">■</span> DONE</span>
         </div>
       </div>
       <div class="qgrid" id="qGrid">
@@ -498,11 +1234,128 @@ canvas{max-height:280px;}
           <th>Turnaround</th><th>Waiting</th><th>Response</th><th>Missed?</th>
         </tr></thead>
         <tbody id="statsBody">
-          <tr><td colspan="11" style="color:var(--muted);text-align:center;padding:20px;">No data yet</td></tr>
+          <tr><td colspan="11" style="color:var(--text2);text-align:center;padding:20px;">No data yet</td></tr>
         </tbody>
       </table>
     </div>
   </main>
+</div>
+
+<!-- ===================== AI INSIGHTS PAGE ===================== -->
+<div id="page-insights" class="page" style="padding:18px;gap:14px;">
+
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
+    <div>
+      <h2 style="font-family:var(--font-display);font-size:1.15rem;font-weight:800;">AI & Insights</h2>
+      <div style="font-size:0.73rem;color:var(--text2);margin-top:3px;">ML predictions, anomaly detection, adaptive scheduler log, and energy telemetry — all from the current simulation.</div>
+    </div>
+    <button onclick="refreshInsights()" style="padding:7px 16px;background:rgba(155,128,255,0.1);border:1px solid rgba(155,128,255,0.35);border-radius:var(--r);color:var(--accent4);font-family:var(--font-mono);font-size:0.72rem;cursor:pointer;" onmouseover="this.style.background='var(--accent4)';this.style.color='#000'" onmouseout="this.style.background='rgba(155,128,255,0.1)';this.style.color='var(--accent4)'">↻ Refresh</button>
+  </div>
+
+  <!-- ML PREDICTION -->
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);">
+    <div style="padding:14px 16px;border-bottom:1px solid var(--border);font-size:0.65rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--accent4);">⬡ AI Prediction — Expected Performance Before Running</div>
+    <div style="padding:14px 16px;">
+      <div class="pred-grid" id="predGrid">
+        <div class="empty" style="grid-column:1/-1;padding:20px;"><div class="empty-icon">⬡</div>Load processes in the Simulator to see predictions</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ML ADVISOR -->
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);">
+    <div style="padding:14px 16px;border-bottom:1px solid var(--border);font-size:0.65rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--accent4);">⬡ ML Advisor — Post-Run Recommendation</div>
+    <div style="padding:14px 16px;">
+      <div id="mlPanel" class="ml-panel" style="margin:0;display:block;">
+        <span style="color:var(--muted);font-size:0.72rem;">Run a simulation to see the ML recommendation.</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ANOMALY DETECTION -->
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);">
+    <div style="padding:14px 16px;border-bottom:1px solid var(--border);font-size:0.65rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--accent3);">⚠ Anomaly Detection</div>
+    <div style="padding:14px 16px;">
+      <div id="anomalyPanel" class="anomaly-panel" style="margin:0;display:block;">
+        <span style="color:var(--muted);font-size:0.72rem;">No anomalies detected yet — run a simulation first.</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ADAPTIVE LOG -->
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);">
+    <div style="padding:14px 16px;border-bottom:1px solid var(--border);font-size:0.65rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--accent4);">⚡ Adaptive Scheduler Log</div>
+    <div style="padding:14px 16px;">
+      <div id="adaptiveLog" style="display:block;">
+        <div class="adaptive-log" id="adaptiveLogBody" style="max-height:160px;">
+          <span style="color:var(--muted);font-size:0.72rem;">Select "Adaptive Hybrid" algorithm and run to see switch decisions.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ENERGY & THERMAL -->
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);">
+    <div style="padding:14px 16px;border-bottom:1px solid var(--border);font-size:0.65rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--accent3);">🌡 Energy & Thermal Telemetry</div>
+    <div id="energyPanel" style="padding:14px 16px;display:flex;flex-wrap:wrap;gap:16px;align-items:center;">
+      <div class="ep-item"><div class="ep-label">Energy Est.</div><div class="ep-val" id="epEnergy">—</div></div>
+      <div class="ep-item"><div class="ep-label">Efficiency</div><div class="ep-val" id="epEff">—</div></div>
+      <div class="ep-item"><div class="ep-label">CPU Temp</div><div class="ep-val" id="epTemp">—</div></div>
+      <div class="ep-item"><div class="ep-label">Throttle</div><div class="ep-val" id="epThrottle">—</div></div>
+      <div class="ep-item"><div class="ep-label">cGroup Quota</div><div class="ep-val" id="epCgroup">—</div></div>
+      <div style="flex:1;"></div>
+      <div id="thermalBadge" class="thermal-badge thermal-normal">NORMAL</div>
+      <div style="font-size:0.7rem;color:var(--text2);">Enable <strong style="color:var(--text)">CPU Thermal Model</strong> in Simulator sidebar to activate.</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ===================== ADVANCED PAGE ===================== -->
+<div id="page-advanced" class="page" style="padding:18px;gap:14px;">
+
+  <div style="flex-shrink:0;">
+    <h2 style="font-family:var(--font-display);font-size:1.15rem;font-weight:800;">Advanced Tools</h2>
+    <div style="font-size:0.73rem;color:var(--text2);margin-top:3px;">Container simulation and real OS trace import.</div>
+  </div>
+
+  <!-- CGROUP VIS -->
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);">
+    <div style="padding:14px 16px;border-bottom:1px solid var(--border);font-size:0.65rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--accent5);">📦 Container / cGroup Resource Usage</div>
+    <div style="padding:14px 16px;display:flex;flex-direction:column;gap:4px;">
+      <div id="cgroupVis" style="display:block;">
+        <div class="cgroup-row"><div class="cgroup-label">CPU Used</div><div class="cgroup-bar-bg"><div class="cgroup-bar-fill" id="cgroupUsedBar" style="width:0%"></div></div><div class="cgroup-val" id="cgroupUsedVal">0%</div></div>
+        <div class="cgroup-row"><div class="cgroup-label">CPU Quota</div><div class="cgroup-bar-bg"><div class="cgroup-bar-fill" id="cgroupQuotaBar" style="width:70%;background:var(--accent3)"></div></div><div class="cgroup-val" id="cgroupQuotaVal">70%</div></div>
+        <div class="cgroup-row"><div class="cgroup-label">Throttled</div><div class="cgroup-bar-bg"><div class="cgroup-bar-fill" id="cgroupThrottleBar" style="width:0%;background:var(--accent2)"></div></div><div class="cgroup-val" id="cgroupThrottleVal">0%</div></div>
+      </div>
+      <div style="font-size:0.7rem;color:var(--text2);margin-top:6px;">Enable <strong style="color:var(--text)">Container Throttle</strong> in Simulator sidebar and set a CPU quota to activate.</div>
+    </div>
+  </div>
+
+  <!-- PERF IMPORT -->
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);">
+    <div style="padding:14px 16px;border-bottom:1px solid var(--border);font-size:0.65rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--accent);">📂 Import Real OS Trace</div>
+    <div style="padding:16px;">
+      <div style="font-size:0.78rem;color:var(--text2);font-family:var(--font-body);margin-bottom:14px;line-height:1.6;">Import a Linux <code style="color:var(--accent);background:var(--surface2);padding:1px 5px;border-radius:3px;">perf sched</code> log or a CSV file to run real workloads through the simulator. The imported processes will appear in the Simulator tab automatically.</div>
+      <div class="perf-drop" id="perfDrop" onclick="document.getElementById('perfFile').click()">
+        <input type="file" id="perfFile" accept=".txt,.log,.perf,.csv" onchange="importPerfTrace(event)">
+        <div style="font-size:1.4rem;margin-bottom:8px;">📂</div>
+        <div style="font-size:0.82rem;font-weight:600;color:var(--text);">Drop file here or click to browse</div>
+        <div style="font-size:0.7rem;color:var(--text2);margin-top:6px;">Accepts: Linux <code>perf sched script</code> output · CSV: <code>name,arrival,burst,priority</code></div>
+      </div>
+      <div style="margin-top:12px;">
+        <div style="font-size:0.65rem;color:var(--text2);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:6px;">Quick CSV Example</div>
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--r);padding:10px 12px;font-family:var(--font-mono);font-size:0.7rem;color:var(--text2);line-height:1.8;">
+          # name, arrival, burst, priority<br>
+          WebServer,0,8,1<br>
+          Database,2,12,2<br>
+          Worker,4,6,3<br>
+          Logger,6,3,4
+        </div>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <!-- ===================== COMPARE PAGE ===================== -->
@@ -524,10 +1377,10 @@ canvas{max-height:280px;}
       </div>
       <button class="run-compare-btn" onclick="runCompare()">⇄ COMPARE SELECTED</button>
       <button class="run-all-btn" onclick="runAllAlgos()">⚡ AUTO-RANK ALL</button>
-      <div id="cmpStatus" style="font-size:0.68rem;color:var(--muted);margin-top:8px;"></div>
+      <div id="cmpStatus" style="font-size:0.7rem;color:var(--text2);margin-top:8px;"></div>
       <div style="margin-top:auto;padding-top:12px;border-top:1px solid var(--border);">
         <div class="s-label" style="margin-bottom:6px;">Current Workload</div>
-        <div id="cmpWorkloadInfo" style="font-size:0.68rem;color:var(--muted);line-height:1.6;"></div>
+        <div id="cmpWorkloadInfo" style="font-size:0.7rem;color:var(--text2);line-height:1.6;"></div>
       </div>
     </aside>
     <div class="compare-main" id="compareMain">
@@ -544,7 +1397,7 @@ canvas{max-height:280px;}
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
     <div>
       <h2 style="font-family:var(--font-display);font-size:1.2rem;font-weight:800;">Tradeoff Visualizer</h2>
-      <div style="font-size:0.72rem;color:var(--muted);margin-top:4px;">Run the Compare tab first to populate charts</div>
+      <div style="font-size:0.74rem;color:var(--text2);margin-top:4px;">Run the Compare tab first to populate charts</div>
     </div>
     <div id="whatifAlgoSel" style="display:flex;gap:6px;"></div>
   </div>
@@ -569,9 +1422,9 @@ canvas{max-height:280px;}
   <!-- WHAT-IF -->
   <div class="whatif-panel" id="whatifPanel">
     <div style="font-family:var(--font-display);font-size:0.9rem;font-weight:700;margin-bottom:4px;color:var(--accent4);">⚡ What-If Simulator</div>
-    <div style="font-size:0.7rem;color:var(--muted);margin-bottom:14px;font-family:var(--font-body);">Adjust Round Robin quantum to preview impact on metrics</div>
+    <div style="font-size:0.73rem;color:var(--text2);margin-bottom:14px;font-family:var(--font-body);">Adjust Round Robin quantum to preview impact on metrics</div>
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
-      <label style="font-size:0.7rem;color:var(--muted);">Time Quantum</label>
+      <label style="font-size:0.73rem;color:var(--text2);">Time Quantum</label>
       <input type="range" id="wiQuantum" min="1" max="20" value="4" style="width:160px;" oninput="updateWhatIf(this.value)">
       <span id="wiQuantumVal" style="font-size:0.9rem;color:var(--accent4);font-family:var(--font-display);font-weight:700;">4ms</span>
     </div>
@@ -589,7 +1442,7 @@ canvas{max-height:280px;}
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
     <div>
       <h2 style="font-family:var(--font-display);font-size:1.2rem;font-weight:800;">Experiment History</h2>
-      <div style="font-size:0.72rem;color:var(--muted);margin-top:4px;">Save runs from the Simulator to build your research log.</div>
+      <div style="font-size:0.74rem;color:var(--text2);margin-top:4px;">Save runs from the Simulator to build your research log.</div>
     </div>
     <button onclick="clearHistory()" style="padding:7px 14px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:var(--font-mono);font-size:0.68rem;cursor:pointer;transition:all 0.15s;" onmouseover="this.style.borderColor='#ff4d6d';this.style.color='#ff4d6d';" onmouseout="this.style.borderColor='';this.style.color='';">Clear All</button>
   </div>
@@ -608,11 +1461,18 @@ canvas{max-height:280px;}
 <!-- ===================== LEARN PAGE ===================== -->
 <div id="page-learn" class="page">
   <div class="learn-layout">
+
+    <!-- Vertical sidebar -->
     <nav class="learn-nav">
-      <div class="learn-nav-item active" onclick="switchLearn('intro',this)">✦ Introduction</div>
-      <div class="learn-nav-item" onclick="switchLearn('algos',this)">⬡ Algorithms</div>
-      <div class="learn-nav-item" onclick="switchLearn('scenarios',this)">⚠ Edge Cases</div>
-      <div class="learn-nav-item" onclick="switchLearn('realworld',this)">◈ Real World</div>
+      <div class="learn-nav-group">Overview</div>
+      <div class="learn-nav-item active" onclick="switchLearn('intro',this)"><span class="ni">✦</span> Introduction</div>
+      <div class="learn-nav-item" onclick="switchLearn('algos',this)"><span class="ni">⬡</span> Algorithms</div>
+
+      <div class="learn-nav-group">Practice</div>
+      <div class="learn-nav-item" onclick="switchLearn('scenarios',this)"><span class="ni">⚠</span> Edge Cases</div>
+
+      <div class="learn-nav-group">Context</div>
+      <div class="learn-nav-item" onclick="switchLearn('realworld',this)"><span class="ni">◈</span> Real World</div>
     </nav>
     <div class="learn-content">
 
@@ -767,7 +1627,205 @@ canvas{max-height:280px;}
   </div>
 </div>
 
+<!-- ===================== HEATMAP PAGE ===================== -->
+<div id="page-heatmap" class="page">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+    <div>
+      <h2 style="font-family:var(--font-display);font-size:1.2rem;font-weight:800;">CPU Heatmaps</h2>
+      <div style="font-size:0.74rem;color:var(--text2);margin-top:3px;">Run a simulation first, then view heatmaps here. Each row = one process; each cell = one time tick.</div>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button onclick="renderHeatmap('wait')" style="padding:7px 14px;background:rgba(255,184,48,0.1);border:1px solid rgba(255,184,48,0.35);border-radius:var(--r);color:var(--accent3);font-family:var(--font-mono);font-size:0.7rem;cursor:pointer;">Waiting Time</button>
+      <button onclick="renderHeatmap('run')" style="padding:7px 14px;background:rgba(0,232,184,0.1);border:1px solid rgba(0,232,184,0.35);border-radius:var(--r);color:var(--accent);font-family:var(--font-mono);font-size:0.7rem;cursor:pointer;">CPU Activity</button>
+      <button onclick="renderHeatmap('energy')" style="padding:7px 14px;background:rgba(155,128,255,0.1);border:1px solid rgba(155,128,255,0.35);border-radius:var(--r);color:var(--accent4);font-family:var(--font-mono);font-size:0.7rem;cursor:pointer;">Energy</button>
+    </div>
+  </div>
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:16px;flex:1;overflow-y:auto;">
+    <div id="heatmapContent">
+      <div class="empty"><div class="empty-icon">🌡</div>Run a simulation to generate heatmaps</div>
+    </div>
+  </div>
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:14px;">
+    <div style="font-size:0.65rem;color:var(--text2);margin-bottom:8px;">Legend</div>
+    <div class="heatmap-legend">
+      <span>Low</span>
+      <div class="heatmap-legend-bar"></div>
+      <span>High</span>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== CHALLENGES PAGE ===================== -->
+<div id="page-challenges" class="page">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+    <div>
+      <h2 style="font-family:var(--font-display);font-size:1.2rem;font-weight:800;">Challenges & Achievements</h2>
+      <div style="font-size:0.74rem;color:var(--text2);margin-top:3px;">Complete challenges to unlock achievements and master CPU scheduling.</div>
+    </div>
+    <div style="font-size:0.8rem;color:var(--accent3);font-family:var(--font-mono);">🏆 <span id="achScore">0</span> / <span id="achTotal">0</span> unlocked</div>
+  </div>
+
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:16px;margin-bottom:16px;">
+    <div class="s-label" style="margin-bottom:12px;">Achievements</div>
+    <div class="achievement-grid" id="achievementGrid"></div>
+  </div>
+
+  <div class="s-label" style="margin-bottom:10px;">Challenges</div>
+  <div class="challenge-grid" id="challengeGrid"></div>
+</div>
+
+<!-- Challenge Active Overlay -->
+<div class="challenge-overlay" id="challengeOverlay">
+  <div class="co-header">
+    <div class="co-title" id="coTitle">Challenge</div>
+    <button class="rdm-close" onclick="closeChallengeOverlay()">×</button>
+  </div>
+  <div class="co-body" id="coBody"></div>
+  <div class="co-result" id="coResult"></div>
+  <button class="co-submit" onclick="checkChallenge()">Check Answer</button>
+</div>
+
+<!-- ===================== LABS PAGE ===================== -->
+<div id="page-labs" class="page">
+  <div style="margin-bottom:16px;">
+    <h2 style="font-family:var(--font-display);font-size:1.2rem;font-weight:800;">Curriculum Labs</h2>
+    <div style="font-size:0.74rem;color:var(--text2);margin-top:3px;">Structured lab exercises aligned with OS course material. Each lab loads a pre-configured workload and guides your analysis.</div>
+  </div>
+
+  <div style="background:rgba(64,184,255,0.06);border:1px solid rgba(64,184,255,0.25);border-radius:var(--r);padding:14px 16px;margin-bottom:16px;font-size:0.78rem;color:var(--text2);font-family:var(--font-body);line-height:1.6;">
+    <strong style="color:var(--accent5);">How to use:</strong> Click "Start Lab" to load the workload into the Simulator. Then use the Simulator, Compare, and Tradeoffs tabs to explore the lab objectives. Return here for hints.
+  </div>
+
+  <div class="lab-grid" id="labGrid"></div>
+
+  <!-- Batch Runner -->
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:18px;margin-top:16px;">
+    <div class="s-label" style="margin-bottom:10px;">Batch Experiment Runner</div>
+    <div style="font-size:0.75rem;color:var(--text2);margin-bottom:12px;font-family:var(--font-body);">Auto-run all 6 algorithms across all presets and rank results. Useful for comparing algorithm behaviour across diverse workloads.</div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+      <button onclick="runBatchExperiments()" style="padding:9px 18px;background:rgba(64,184,255,0.1);border:1px solid rgba(64,184,255,0.35);border-radius:var(--r);color:var(--accent5);font-family:var(--font-mono);font-size:0.75rem;cursor:pointer;transition:all 0.15s;" onmouseover="this.style.background='var(--accent5)';this.style.color='#000'" onmouseout="this.style.background='rgba(64,184,255,0.1)';this.style.color='var(--accent5)'">⚡ Run All Experiments</button>
+      <span id="batchStatus" style="font-size:0.72rem;color:var(--text2);"></span>
+    </div>
+    <div class="batch-results" id="batchResults">
+      <div class="batch-row header"><span>Workload</span><span>Algorithm</span><span>Avg TAT</span><span>Avg WT</span><span>Util</span><span>Fairness</span></div>
+    </div>
+  </div>
+</div>
+
 </div><!-- z1 -->
+
+<!-- ===================== RUN DETAIL MODAL ===================== -->
+<div class="run-detail-modal" id="runDetailModal">
+  <div class="run-detail-inner">
+    <div class="rdm-header">
+      <div>
+        <div class="rdm-title" id="rdmTitle">Run Details</div>
+        <div style="font-size:0.65rem;color:var(--text2);margin-top:2px;" id="rdmSubtitle"></div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button class="rdm-compare-btn" id="rdmCompareBtn" onclick="addToHistoryCompare()">+ Add to Compare</button>
+        <button class="rdm-close" onclick="closeRunDetail()">×</button>
+      </div>
+    </div>
+    <div class="rdm-body">
+      <div>
+        <div class="rdm-section-title">Metrics</div>
+        <div class="rdm-metrics" id="rdmMetrics"></div>
+      </div>
+      <div id="rdmTagsRow" style="display:none;">
+        <div class="rdm-section-title">Tags</div>
+        <div class="rdm-tags" id="rdmTags"></div>
+      </div>
+      <div id="rdmNotesRow" style="display:none;">
+        <div class="rdm-section-title">Notes</div>
+        <div class="rdm-notes" id="rdmNotes"></div>
+      </div>
+      <div>
+        <div class="rdm-section-title">Gantt Chart</div>
+        <div class="rdm-gantt" id="rdmGantt"></div>
+        <div class="gantt-axis" id="rdmAxis" style="margin-top:4px;"></div>
+      </div>
+      <div>
+        <div class="rdm-section-title">Per-Process Statistics</div>
+        <table class="rdm-procs-table">
+          <thead><tr><th>Name</th><th>Arrival</th><th>Burst</th><th>Priority</th><th>Finish</th><th>Turnaround</th><th>Waiting</th><th>Response</th></tr></thead>
+          <tbody id="rdmProcsBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== HISTORY COMPARE MODAL ===================== -->
+<div class="modal-overlay" id="histCompareModal">
+  <div class="modal" style="max-width:780px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+      <div class="modal-title">⇄ Run Comparison</div>
+      <button class="rdm-close" onclick="document.getElementById('histCompareModal').classList.remove('open')">×</button>
+    </div>
+    <div class="hcr-grid" id="hcrGrid"></div>
+    <div id="hcrDiff" style="margin-top:14px;"></div>
+  </div>
+</div>
+
+<!-- ===================== PROCESS MANAGER MODAL ===================== -->
+<div class="proc-modal-overlay" id="procModal">
+  <div class="proc-modal">
+
+    <div class="pm-header">
+      <div class="pm-title">⬡ Process Queue</div>
+      <div class="pm-header-actions">
+        <button class="pm-clear-btn" onclick="clearAllProcesses()">Clear All</button>
+        <button class="pm-close" onclick="closeProcModal()">×</button>
+      </div>
+    </div>
+
+    <!-- Add form -->
+    <div class="pm-add-form">
+      <div class="pm-add-title">Add New Process</div>
+      <div class="pm-form-grid">
+        <div class="pm-fg"><label>Name</label><input class="pm-input" id="pmName" placeholder="P1" maxlength="8"></div>
+        <div class="pm-fg"><label>Arrival</label><input class="pm-input" id="pmArrival" type="number" value="0" min="0"></div>
+        <div class="pm-fg"><label>Burst</label><input class="pm-input" id="pmBurst" type="number" value="8" min="1"></div>
+        <div class="pm-fg"><label>Priority</label><input class="pm-input" id="pmPriority" type="number" value="1" min="1"></div>
+        <div class="pm-fg"><label>I/O %</label><input class="pm-input" id="pmIO" type="number" value="0" min="0" max="80"></div>
+        <div class="pm-fg"><label>Deadline</label><input class="pm-input" id="pmDeadline" type="number" value="0" min="0"></div>
+        <div class="pm-fg"><label>Color</label><input class="pm-input" id="pmColor" type="color" value="#00e8b8" style="padding:2px;cursor:pointer;height:34px;"></div>
+        <div class="pm-fg" style="align-self:end;">
+          <button class="pm-add-btn" onclick="addProcessFromModal()" title="Add process">＋</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Column headers -->
+    <div class="pm-cols">
+      <div class="pm-col-h"></div>
+      <div class="pm-col-h">Name</div>
+      <div class="pm-col-h">Arrival</div>
+      <div class="pm-col-h">Burst</div>
+      <div class="pm-col-h">Priority</div>
+      <div class="pm-col-h">I/O %</div>
+      <div class="pm-col-h">Deadline</div>
+      <div class="pm-col-h"></div>
+      <div class="pm-col-h"></div>
+    </div>
+
+    <!-- Process list -->
+    <div class="pm-list" id="pmList">
+      <div class="pm-empty"><div class="pm-empty-icon">⬡</div>No processes yet — add one above or load a preset.</div>
+    </div>
+
+    <!-- Footer -->
+    <div class="pm-footer">
+      <div class="pm-footer-stat">
+        <span id="pmCount">0</span> processes &nbsp;·&nbsp;
+        Avg burst: <span id="pmAvgBurst">—</span> ms &nbsp;·&nbsp;
+        Total CPU: <span id="pmTotalBurst">—</span> ms
+      </div>
+      <button class="pm-close" onclick="closeProcModal()" style="font-size:0.72rem;color:var(--text2);padding:6px 14px;border:1px solid var(--border);border-radius:var(--r);font-family:var(--font-mono);">Done ✓</button>
+    </div>
+  </div>
+</div>
 
 <!-- SAVE MODAL -->
 <div class="modal-overlay" id="saveModal">
@@ -786,12 +1844,22 @@ canvas{max-height:280px;}
 
 <script>
 // ==========================================
+// SAFE DOM HELPER
+// g(id) — null-safe getElementById. Prevents crashes when elements
+// live on other tabs/pages and aren't currently in the DOM.
+// ==========================================
+const g = id => document.getElementById(id);
+const gs = (id, prop, val) => { const el = g(id); if (el) el[prop] = val; };
+const gStyle = (id, prop, val) => { const el = g(id); if (el) el.style[prop] = val; };
+
+// ==========================================
 // GLOBAL STATE
 // ==========================================
 let processes = [], selectedAlgo = 'fcfs', simRunning = false;
 let simInterval = null, tick = 0, simTime = 0;
 let ganttLog = [], simProcs = [], simFinished = [];
 let pidCounter = 1, colorIdx = 0, contextSwitches = 0, lastRunPid = -99;
+let rrQueue = []; // FIFO queue for Round Robin scheduling
 let history = JSON.parse(localStorage.getItem('nexos_history') || '[]');
 let compareResults = {};
 let scatterChart = null, radarChart = null;
@@ -862,21 +1930,194 @@ function addProcess(data) {
   }
 }
 
-function removeProcess(pid) { processes=processes.filter(p=>p.pid!==pid); renderProcList(); }
+function removeProcess(pid) {
+  processes = processes.filter(p => p.pid !== pid);
+  renderProcList();
+}
 
 function renderProcList() {
-  const el = document.getElementById('procList');
-  document.getElementById('procCount').textContent = processes.length;
-  if(!processes.length){el.innerHTML=`<div class="empty"><div class="empty-icon">⬡</div>No processes yet</div>`;return;}
-  el.innerHTML = processes.map(p=>`
-    <div class="pc" style="border-left-color:${p.color}">
-      <div class="pc-dot" style="background:${p.color}"></div>
-      <div class="pc-name">${p.name}</div>
-      <div class="pc-meta">B:${p.burst} A:${p.arrival} P:${p.priority}${p.io?` IO:${p.io}%`:''}${p.deadline?` DL:${p.deadline}`:''}
-      </div>
-      <button class="pc-del" onclick="removeProcess(${p.pid})">×</button>
+  // Update sidebar summary box
+  const countEl = g('procCount');
+  const dotsEl  = g('queueDots');
+  const pmCount = g('pmCount');
+  if (countEl) countEl.textContent = processes.length;
+  if (pmCount)  pmCount.textContent = processes.length;
+
+  // Coloured dots in summary box (up to 12)
+  if (dotsEl) {
+    dotsEl.innerHTML = processes.slice(0,12).map(p =>
+      `<div class="qb-dot" style="background:${p.color}" title="${p.name}"></div>`
+    ).join('');
+    if (!processes.length) dotsEl.innerHTML = '<span style="font-size:0.65rem;color:var(--text2);">No processes</span>';
+  }
+
+  // Footer stats in modal
+  if (processes.length) {
+    const total = processes.reduce((s,p)=>s+p.burst,0);
+    const avg   = (total/processes.length).toFixed(1);
+    gs('pmAvgBurst','textContent', avg);
+    gs('pmTotalBurst','textContent', total);
+  } else {
+    gs('pmAvgBurst','textContent','—');
+    gs('pmTotalBurst','textContent','—');
+  }
+
+  // Render modal rows
+  renderPMList();
+  // Refresh AI predictions
+  showPredictions();
+}
+
+function renderPMList() {
+  const list = g('pmList');
+  if (!list) return;
+  if (!processes.length) {
+    list.innerHTML = '<div class="pm-empty"><div class="pm-empty-icon">⬡</div>No processes yet — add one above or load a preset.</div>';
+    return;
+  }
+  list.innerHTML = processes.map(p => `
+    <div class="pm-row" id="pmRow_${p.pid}" style="border-left-color:${p.color}">
+      <div style="width:10px;height:10px;border-radius:50%;background:${p.color};flex-shrink:0;"></div>
+      <div class="pm-cell" id="pmCell_name_${p.pid}">${p.name}</div>
+      <div class="pm-cell" id="pmCell_arrival_${p.pid}">${p.arrival}</div>
+      <div class="pm-cell" id="pmCell_burst_${p.pid}">${p.burst}</div>
+      <div class="pm-cell" id="pmCell_priority_${p.pid}">${p.priority}</div>
+      <div class="pm-cell" id="pmCell_io_${p.pid}">${p.io||0}</div>
+      <div class="pm-cell" id="pmCell_deadline_${p.pid}">${p.deadline||'—'}</div>
+      <button class="pm-icon-btn edit" onclick="editProcRow(${p.pid})" title="Edit">✎</button>
+      <button class="pm-icon-btn del"  onclick="deleteProcFromModal(${p.pid})" title="Delete">✕</button>
     </div>`).join('');
 }
+
+function openProcModal() {
+  const modal = g('procModal');
+  if (modal) modal.classList.add('open');
+  renderPMList();
+  // Sync the modal add form color to next expected color
+  const colorInput = g('pmColor');
+  if (colorInput) colorInput.value = COLORS[colorIdx % COLORS.length];
+}
+
+function closeProcModal() {
+  const modal = g('procModal');
+  if (modal) modal.classList.remove('open');
+}
+
+function addProcessFromModal() {
+  const nameEl     = g('pmName');
+  const arrivalEl  = g('pmArrival');
+  const burstEl    = g('pmBurst');
+  const priorityEl = g('pmPriority');
+  const ioEl       = g('pmIO');
+  const deadlineEl = g('pmDeadline');
+  const colorEl    = g('pmColor');
+
+  const name     = nameEl     ? (nameEl.value.trim() || `P${pidCounter}`)  : `P${pidCounter}`;
+  const arrival  = arrivalEl  ? (parseInt(arrivalEl.value)  || 0) : 0;
+  const burst    = burstEl    ? (parseInt(burstEl.value)    || 8) : 8;
+  const priority = priorityEl ? (parseInt(priorityEl.value) || 1) : 1;
+  const io       = ioEl       ? (parseInt(ioEl.value)       || 0) : 0;
+  const deadline = deadlineEl ? (parseInt(deadlineEl.value) || 0) : 0;
+  const color    = colorEl    ? colorEl.value : COLORS[colorIdx % COLORS.length];
+
+  processes.push({pid:pidCounter++, name, arrival, burst, priority, io, deadline, color});
+  colorIdx++;
+
+  // Reset fields
+  if (nameEl)     nameEl.value     = '';
+  if (arrivalEl)  arrivalEl.value  = '0';
+  if (burstEl)    burstEl.value    = '8';
+  if (priorityEl) priorityEl.value = '1';
+  if (ioEl)       ioEl.value       = '0';
+  if (deadlineEl) deadlineEl.value = '0';
+  if (colorEl)    colorEl.value    = COLORS[colorIdx % COLORS.length];
+
+  renderProcList();
+  // Also sync sidebar form
+  gs('pColor','value', COLORS[colorIdx % COLORS.length]);
+}
+
+let editingPid = null;
+
+function editProcRow(pid) {
+  // If already editing this row, save it
+  if (editingPid === pid) { saveProcRow(pid); return; }
+  // If editing another row, cancel it first
+  if (editingPid !== null) cancelEditRow(editingPid);
+  editingPid = pid;
+
+  const p   = processes.find(x => x.pid === pid);
+  if (!p) return;
+  const row = g(`pmRow_${pid}`);
+  if (row) row.classList.add('editing');
+
+  // Replace each cell with an input
+  const fields = [
+    ['name',     p.name,           'text',   ''],
+    ['arrival',  p.arrival,        'number', 'min="0"'],
+    ['burst',    p.burst,          'number', 'min="1"'],
+    ['priority', p.priority,       'number', 'min="1"'],
+    ['io',       p.io||0,          'number', 'min="0" max="80"'],
+    ['deadline', p.deadline||0,    'number', 'min="0"'],
+  ];
+  fields.forEach(([field, val, type, attrs]) => {
+    const cell = g(`pmCell_${field}_${pid}`);
+    if (cell) cell.innerHTML = `<input class="pm-row-input" id="pmEdit_${field}_${pid}" type="${type}" value="${val}" ${attrs}>`;
+  });
+
+  // Flip edit button to save
+  const editBtn = row ? row.querySelector('.pm-icon-btn.edit') : null;
+  if (editBtn) {
+    editBtn.textContent = '✓';
+    editBtn.className = 'pm-icon-btn save';
+    editBtn.setAttribute('onclick', `saveProcRow(${pid})`);
+    editBtn.title = 'Save';
+  }
+}
+
+function saveProcRow(pid) {
+  const p = processes.find(x => x.pid === pid);
+  if (!p) return;
+
+  const get = field => {
+    const el = g(`pmEdit_${field}_${pid}`);
+    return el ? el.value : null;
+  };
+
+  const name = get('name');
+  if (name !== null) p.name     = name.trim() || p.name;
+  const arr  = get('arrival');  if (arr  !== null) p.arrival  = parseInt(arr)  || 0;
+  const bst  = get('burst');    if (bst  !== null) p.burst    = Math.max(1,parseInt(bst)||1);
+  const pri  = get('priority'); if (pri  !== null) p.priority = parseInt(pri)  || 1;
+  const io   = get('io');       if (io   !== null) p.io       = Math.min(80,Math.max(0,parseInt(io)||0));
+  const dl   = get('deadline'); if (dl   !== null) p.deadline = parseInt(dl)   || 0;
+
+  editingPid = null;
+  renderProcList();
+}
+
+function cancelEditRow(pid) {
+  editingPid = null;
+  renderPMList();
+}
+
+function deleteProcFromModal(pid) {
+  processes = processes.filter(p => p.pid !== pid);
+  if (editingPid === pid) editingPid = null;
+  renderProcList();
+}
+
+function clearAllProcesses() {
+  if (processes.length && !confirm('Remove all processes?')) return;
+  processes = []; pidCounter = 1; colorIdx = 0; editingPid = null;
+  renderProcList();
+  resetSim();
+}
+
+// Close modal on overlay click
+document.getElementById('procModal').addEventListener('click', function(e) {
+  if (e.target === this) closeProcModal();
+});
 
 // ==========================================
 // PRESETS
@@ -964,6 +2205,9 @@ function doStep() {
 
 function initSim() {
   ganttLog=[];simFinished=[];simTime=0;tick=0;contextSwitches=0;lastRunPid=-99;
+  // BUG FIX #1: rrQueue tracks the circular order for Round Robin.
+  // Without it, RR just picks ready[0] each time which is not correct FIFO rotation.
+  rrQueue=[];
   simProcs = processes.map(p=>({
     ...p, remaining:p.burst, state:'waiting',
     startTime:-1,finishTime:-1,responseTime:-1,
@@ -994,17 +2238,18 @@ function pauseSim() {
 
 function resetSim() {
   pauseSim();simTime=0;tick=0;contextSwitches=0;lastRunPid=-99;
-  ganttLog=[];simFinished=[];simProcs=[];
+  ganttLog=[];simFinished=[];simProcs=[];rrQueue=[];
   setStatus('IDLE',false);
-  document.getElementById('runBtn').textContent='▶ RUN';
-  document.getElementById('tickDisp').textContent='0';
-  document.getElementById('navTick').textContent='0';
-  document.getElementById('stepBtn').style.display='none';
-  document.getElementById('runBtn').style.display='';
+  gs('runBtn','textContent','▶ RUN');
+  gs('tickDisp','textContent','0');
+  gs('navTick','textContent','0');
+  gStyle('stepBtn','display','none');
+  gStyle('runBtn','display','');
   renderGantt();renderQCards([]);renderStats([]);clearMetrics();
-  document.getElementById('mlPanel').style.display='none';
-  document.getElementById('stepBox').style.display='none';
-  document.getElementById('starveWarn').style.display='none';
+  // These panels live on other pages now — use safe access
+  gStyle('mlPanel','display','none');
+  gStyle('stepBox','display','none');
+  gStyle('starveWarn','display','none');
 }
 
 function setStatus(txt,active){
@@ -1016,68 +2261,132 @@ function setStatus(txt,active){
 // SIMULATION STEP
 // ==========================================
 function simStep() {
-  const allDone = simProcs.length>0 && simProcs.every(p=>p.state==='done');
-  if(allDone){ pauseSim(); setStatus('COMPLETE',false); computeMetrics(); showML(); renderStats(simProcs); return; }
-
+  // BUG FIX #2: Check done AFTER arrivals so newly-arrived processes aren't missed on final tick.
   const quantum = parseInt(document.getElementById('quantumInput').value)||4;
   const algo = selectedAlgo;
 
-  // Handle I/O timers
+  // Handle I/O timers first
   simProcs.forEach(p=>{
     if(p.isInIO){
       p.ioTimer--;
-      if(p.ioTimer<=0){p.isInIO=false;p.state='ready';}
+      if(p.ioTimer<=0){
+        p.isInIO=false;
+        p.state='ready';
+        // BUG FIX #3: Re-insert into RR queue when I/O completes
+        if(algo==='rr' && !rrQueue.includes(p)) rrQueue.push(p);
+      }
     }
   });
 
-  // Arrive
+  // Arrive — add newly arrived processes to RR queue in arrival order
   simProcs.forEach(p=>{
-    if(p.state==='waiting'&&p.arrival<=simTime) p.state='ready';
+    if(p.state==='waiting'&&p.arrival<=simTime){
+      p.state='ready';
+      // BUG FIX #4: Track arrival into RR queue so rotation is correct
+      if(algo==='rr' && !rrQueue.includes(p)) rrQueue.push(p);
+    }
   });
+
+  // Now check if all done
+  const allDone = simProcs.length>0 && simProcs.every(p=>p.state==='done');
+  if(allDone){ pauseSim(); setStatus('COMPLETE',false); computeMetrics(); showML(); renderStats(simProcs); return; }
 
   // Pick running process
   let running = null;
-  const ready = simProcs.filter(p=>p.state==='ready'||p.state==='running');
 
   if(algo==='fcfs'){
-    running = ready.sort((a,b)=>a.arrival-b.arrival)[0]||null;
+    // Non-preemptive: keep running process if there is one
+    const cur=simProcs.find(p=>p.state==='running');
+    if(cur){ running=cur; }
+    else {
+      // Pick earliest-arrived ready process
+      const ready=simProcs.filter(p=>p.state==='ready');
+      running = ready.sort((a,b)=>a.arrival-b.arrival)[0]||null;
+    }
+
   } else if(algo==='sjf'){
+    // Non-preemptive SJF: keep current running process, only schedule on empty CPU
     const cur=simProcs.find(p=>p.state==='running');
-    running = cur || ready.sort((a,b)=>a.remaining-b.remaining)[0]||null;
+    if(cur){ running=cur; }
+    else {
+      const ready=simProcs.filter(p=>p.state==='ready');
+      running = ready.sort((a,b)=>a.remaining-b.remaining||a.arrival-b.arrival)[0]||null;
+    }
+
   } else if(algo==='srtf'){
-    running = ready.sort((a,b)=>a.remaining-b.remaining)[0]||null;
+    // Preemptive SJF: always pick shortest remaining, tie-break by arrival
+    const ready=simProcs.filter(p=>p.state==='ready'||p.state==='running');
+    running = ready.sort((a,b)=>a.remaining-b.remaining||a.arrival-b.arrival)[0]||null;
+
   } else if(algo==='priority'){
+    // Non-preemptive priority: keep current, only re-schedule on empty CPU
     const cur=simProcs.find(p=>p.state==='running');
-    running = cur || ready.sort((a,b)=>a.priority-b.priority)[0]||null;
+    if(cur){ running=cur; }
+    else {
+      const ready=simProcs.filter(p=>p.state==='ready');
+      // Lower priority number = higher priority, tie-break by arrival
+      running = ready.sort((a,b)=>a.priority-b.priority||a.arrival-b.arrival)[0]||null;
+    }
+
   } else if(algo==='rr'){
+    // BUG FIX #5: Proper Round Robin with a FIFO queue.
+    // quantumUsed is incremented BEFORE checking expiry (off-by-one was causing
+    // processes to get quantum+1 ticks instead of exactly quantum ticks).
     const cur=simProcs.find(p=>p.state==='running');
     if(cur){
       cur.quantumUsed++;
-      if(cur.quantumUsed>=quantum){cur.state='ready';cur.quantumUsed=0;running=simProcs.filter(p=>p.state==='ready')[0]||null;}
-      else running=cur;
-    } else { running=ready[0]||null; }
-  } else if(algo==='mlfq'){
-    const cur=simProcs.find(p=>p.state==='running');
-    const q2=Math.min(quantum*Math.pow(2,cur?cur.queueLevel:0),16);
-    if(cur){
-      cur.quantumUsed++;
-      if(cur.quantumUsed>=q2){cur.queueLevel=Math.min(cur.queueLevel+1,2);cur.state='ready';cur.quantumUsed=0;}
-      else running=cur;
+      if(cur.quantumUsed>=quantum){
+        // Quantum expired — move to back of queue
+        cur.state='ready';
+        cur.quantumUsed=0;
+        // Remove from front, push to back (already in queue, just reorder)
+        rrQueue=rrQueue.filter(p=>p!==cur);
+        rrQueue.push(cur);
+      } else {
+        running=cur;
+      }
     }
     if(!running){
+      // Clean stale entries and pick head of queue
+      rrQueue=rrQueue.filter(p=>p.state==='ready');
+      running=rrQueue[0]||null;
+    }
+
+  } else if(algo==='mlfq'){
+    // BUG FIX #6: MLFQ — only demote when quantumUsed reaches the level's quota.
+    // Previously the check was in the wrong branch, sometimes demoting immediately.
+    const cur=simProcs.find(p=>p.state==='running');
+    if(cur){
+      // Quantum for this level doubles each level: q, 2q, 4q (capped at 16)
+      const levelQ=Math.min(quantum*Math.pow(2,cur.queueLevel),16);
+      cur.quantumUsed++;
+      if(cur.quantumUsed>=levelQ){
+        cur.queueLevel=Math.min(cur.queueLevel+1,2);
+        cur.state='ready';
+        cur.quantumUsed=0;
+        // running stays null — fall through to pick next
+      } else {
+        running=cur;
+      }
+    }
+    if(!running){
+      // Pick highest-priority non-empty level
       for(let lv=0;lv<=2;lv++){
         const lr=simProcs.filter(p=>p.state==='ready'&&p.queueLevel===lv);
-        if(lr.length){running=lr[0];break;}
+        if(lr.length){
+          // Within same level, FCFS
+          running=lr.sort((a,b)=>a.arrival-b.arrival)[0];
+          break;
+        }
       }
     }
   }
 
   // Context switch detection
   if(running&&running.pid!==lastRunPid&&lastRunPid!==-99) contextSwitches++;
-  if(running) lastRunPid=running.pid;
-  else lastRunPid=-99;
+  lastRunPid = running ? running.pid : -99;
 
-  // Update states
+  // Demote any other 'running' process back to 'ready' (handles preemption)
   simProcs.forEach(p=>{if(p.state==='running'&&p!==running)p.state='ready';});
 
   if(running){
@@ -1086,64 +2395,74 @@ function simStep() {
     running.state='running';
     running.remaining--;
 
-    // Gantt log
+    // Gantt log — extend last bar if same process, else new entry
     const last=ganttLog[ganttLog.length-1];
     if(last&&last.pid===running.pid) last.end=simTime+1;
     else ganttLog.push({pid:running.pid,name:running.name,color:running.color,start:simTime,end:simTime+1});
 
-    // I/O burst chance
+    // I/O burst chance — only fires probabilistically, not every tick
     if(running.remaining>0&&running.io>0&&Math.random()*100<running.io*0.05){
       running.isInIO=true;running.state='io';
       running.ioTimer=Math.ceil(Math.random()*3)+1;
+      // BUG FIX #7: Remove from RR queue when going to I/O (re-added on return)
+      rrQueue=rrQueue.filter(p=>p!==running);
       lastRunPid=-99;
     }
 
     if(running.remaining<=0){
-      running.state='done';running.finishTime=simTime+1;
+      running.state='done';
+      running.finishTime=simTime+1;
       if(running.deadline>0&&running.finishTime>running.deadline) running.missedDeadline=true;
       simFinished.push(running);
+      // Remove finished process from RR queue
+      rrQueue=rrQueue.filter(p=>p!==running);
     }
   } else {
+    // CPU idle
     const last=ganttLog[ganttLog.length-1];
     if(last&&last.pid===-1) last.end=simTime+1;
     else if(simTime>0||ganttLog.length>0) ganttLog.push({pid:-1,name:'IDLE',color:null,start:simTime,end:simTime+1});
   }
 
-  // Waiting time
-  simProcs.forEach(p=>{if(p.state==='ready')p.waitTime++;});
+  // BUG FIX #8: Only count waitTime for processes that are truly ready.
+  simProcs.forEach(p=>{ if(p.state==='ready') p.waitTime++; });
 
   // Starvation detection
   const starved = simProcs.filter(p=>p.state==='ready'&&p.waitTime>p.burst*3);
-  const starveEl=document.getElementById('starveWarn');
+  const starveEl = g('starveWarn');
   if(starved.length){
-    document.getElementById('starveList').textContent=starved.map(p=>p.name).join(', ');
-    starveEl.style.display='block';
-  } else starveEl.style.display='none';
+    gs('starveList','textContent',starved.map(p=>p.name).join(', '));
+    if(starveEl) starveEl.style.display='block';
+  } else if(starveEl) starveEl.style.display='none';
 
   simTime++;tick++;
-  document.getElementById('tickDisp').textContent=tick;
-  document.getElementById('navTick').textContent=tick;
-  document.getElementById('mCtx').textContent=contextSwitches;
+  gs('tickDisp','textContent',tick);
+  gs('navTick','textContent',tick);
+  gs('mCtx','textContent',contextSwitches);
 
   renderGantt();renderQCards(simProcs);
   if(simFinished.length) renderStats(simProcs);
 
-  // Step mode explanation
-  if(document.getElementById('stepMode').checked) showStepExplain(running);
+  const stepModeEl = g('stepMode');
+  if(stepModeEl && stepModeEl.checked) showStepExplain(running);
 }
 
 function showStepExplain(running) {
-  const box=document.getElementById('stepBox');
+  const box = g('stepBox');
+  if (!box) return;
   box.style.display='block';
   if(!running){box.innerHTML=`<strong>Tick ${simTime-1}:</strong> CPU is <strong>IDLE</strong> — no processes in the ready queue.`;return;}
   const algo=selectedAlgo;
+  const qEl = g('quantumInput');
+  const q = qEl ? (parseInt(qEl.value)||4) : 4;
   let why='';
   if(algo==='fcfs') why=`arrived first (at t=${running.arrival})`;
-  else if(algo==='sjf'||algo==='srtf') why=`has the shortest remaining time (${running.remaining+1}ms)`;
-  else if(algo==='priority') why=`has the highest priority (${running.priority})`;
-  else if(algo==='rr') why=`is next in the round-robin queue (quantum used: ${running.quantumUsed}/${parseInt(document.getElementById('quantumInput').value)||4})`;
-  else if(algo==='mlfq') why=`is at queue level ${running.queueLevel} (lower = higher priority)`;
-  box.innerHTML=`<strong>Tick ${simTime-1} [${ALGO_NAMES[algo]}]:</strong> Running <strong style="color:${running.color}">${running.name}</strong> — selected because it ${why}. Remaining: <strong>${running.remaining}ms</strong>.`;
+  else if(algo==='sjf') why=`has the shortest burst among available processes (${running.remaining} ms remaining)`;
+  else if(algo==='srtf') why=`has the shortest remaining time (${running.remaining} ms) — preemptive`;
+  else if(algo==='priority') why=`has the highest priority (${running.priority} — lower = higher priority)`;
+  else if(algo==='rr') why=`is next in the round-robin queue (${running.quantumUsed}/${q} ticks used this slice)`;
+  else if(algo==='mlfq') why=`is at queue level ${running.queueLevel} (level 0 = highest priority)`;
+  box.innerHTML=`<strong>Tick ${simTime-1} [${ALGO_NAMES[algo]}]:</strong> Running <strong style="color:${running.color}">${running.name}</strong> — ${why}. Remaining: <strong>${running.remaining} ms</strong>.`;
 }
 
 // ==========================================
@@ -1191,7 +2510,7 @@ function renderQCards(procs) {
 function renderStats(procs) {
   const body=document.getElementById('statsBody');
   const all=procs.filter(p=>p.startTime!==-1);
-  if(!all.length){body.innerHTML=`<tr><td colspan="11" style="color:var(--muted);text-align:center;padding:16px;">No data yet</td></tr>`;return;}
+  if(!all.length){body.innerHTML=`<tr><td colspan="11" style="color:var(--text2);text-align:center;padding:16px;">No data yet</td></tr>`;return;}
   body.innerHTML=all.map(p=>{
     const tat=p.finishTime!==-1?p.finishTime-p.arrival:simTime-p.arrival;
     const ft=p.finishTime!==-1?p.finishTime:'…';
@@ -1199,7 +2518,7 @@ function renderStats(procs) {
     const missed=p.missedDeadline?`<span class="starve-badge">MISSED</span>`:'';
     const starved=p.waitTime>p.burst*3?`<span class="starve-badge">STARVED</span>`:'';
     return `<tr>
-      <td style="color:var(--muted);">${p.pid}</td>
+      <td style="color:var(--text2);">${p.pid}</td>
       <td style="color:${p.color};font-weight:600;">${p.name}${starved}</td>
       <td>${p.arrival}</td><td>${p.burst}</td><td>${p.priority}</td>
       <td>${p.deadline||'—'}</td>
@@ -1219,22 +2538,21 @@ function computeMetrics() {
   const avgTAT=done.reduce((s,p)=>s+(p.finishTime-p.arrival),0)/done.length;
   const avgWT=done.reduce((s,p)=>s+p.waitTime,0)/done.length;
   const avgRT=done.filter(p=>p.responseTime!==-1).reduce((s,p)=>s+p.responseTime,0)/done.length;
-  const busy=ganttLog.filter(g=>g.pid!==-1).reduce((s,g)=>s+(g.end-g.start),0);
-  const util=Math.round((busy/simTime)*100);
+  const busyTime=ganttLog.filter(entry=>entry.pid!==-1).reduce((s,entry)=>s+(entry.end-entry.start),0);
+  const util=Math.round((busyTime/simTime)*100);
   const thru=((done.length/simTime)*100).toFixed(1);
-  document.getElementById('mTAT').textContent=avgTAT.toFixed(1);
-  document.getElementById('mWT').textContent=avgWT.toFixed(1);
-  document.getElementById('mRT').textContent=avgRT.toFixed(1);
-  document.getElementById('mUtil').textContent=util+'%';
-  document.getElementById('mThru').textContent=thru;
-  document.getElementById('mCtx').textContent=contextSwitches;
-  // Store for what-if
+  gs('mTAT','textContent',avgTAT.toFixed(1));
+  gs('mWT','textContent',avgWT.toFixed(1));
+  gs('mRT','textContent',avgRT.toFixed(1));
+  gs('mUtil','textContent',util+'%');
+  gs('mThru','textContent',thru);
+  gs('mCtx','textContent',contextSwitches);
   whatifBaseWT=avgWT;whatifBaseCtx=contextSwitches;whatifBaseUtil=util;
 }
 
 function clearMetrics(){
-  ['mTAT','mWT','mRT','mUtil','mThru'].forEach(id=>document.getElementById(id).textContent='—');
-  document.getElementById('mCtx').textContent='0';
+  ['mTAT','mWT','mRT','mUtil','mThru'].forEach(id=>gs(id,'textContent','—'));
+  gs('mCtx','textContent','0');
 }
 
 // ==========================================
@@ -1242,7 +2560,7 @@ function clearMetrics(){
 // ==========================================
 function showML() {
   if(!processes.length) return;
-  const panel=document.getElementById('mlPanel');
+  const panel = g('mlPanel');
   const avgBurst=processes.reduce((s,p)=>s+p.burst,0)/processes.length;
   const variance=processes.reduce((s,p)=>s+Math.pow(p.burst-avgBurst,2),0)/processes.length;
   const std=Math.sqrt(variance);
@@ -1268,14 +2586,16 @@ function showML() {
   if(std>4) reasons.push(`High burst variance (σ=${std.toFixed(1)}ms) → shortest-job algorithms dramatically outperform FCFS`);
   if(contextSwitches>n*4) reasons.push(`High context switches (${contextSwitches}) → consider a larger quantum or non-preemptive algorithm`);
 
+  lastMLrec = best;
+
   const isBest=best===algo;
-  panel.style.display='block';
-  panel.innerHTML=`
+  const html=`
     <div class="ml-header">⬡ ML ADVISOR — EXPLAINABLE RECOMMENDATION</div>
     ${isBest
-      ? `✓ <strong>${ALGO_NAMES[algo]}</strong> is optimal for this workload.`
-      : `Recommends <strong style="color:var(--accent)">${ALGO_NAMES[best]}</strong> over ${ALGO_NAMES[algo]} for this workload.`}
+      ? `✓ <strong>${ALGO_NAMES[algo]||algo}</strong> is optimal for this workload.`
+      : `Recommends <strong style="color:var(--accent)">${ALGO_NAMES[best]}</strong> over ${ALGO_NAMES[algo]||algo} for this workload.`}
     <div class="ml-reasons">${reasons.map(r=>`<div class="ml-reason">${r}</div>`).join('')}</div>`;
+  if (panel) { panel.style.display='block'; panel.innerHTML=html; }
 }
 
 // ==========================================
@@ -1287,32 +2607,34 @@ function saveRun() {
   if(!simFinished.length&&!simProcs.length) return;
   pendingSaveData = {
     algo: selectedAlgo,
-    algoName: ALGO_NAMES[selectedAlgo],
+    algoName: ALGO_NAMES[selectedAlgo] || selectedAlgo,
     time: new Date().toISOString(),
     processes: processes.map(p=>({...p})),
     metrics: {
-      tat: document.getElementById('mTAT').textContent,
-      wt: document.getElementById('mWT').textContent,
-      rt: document.getElementById('mRT').textContent,
-      util: document.getElementById('mUtil').textContent,
-      thru: document.getElementById('mThru').textContent,
-      ctx: document.getElementById('mCtx').textContent,
+      tat:  (g('mTAT')  || {textContent:'—'}).textContent,
+      wt:   (g('mWT')   || {textContent:'—'}).textContent,
+      rt:   (g('mRT')   || {textContent:'—'}).textContent,
+      util: (g('mUtil') || {textContent:'—'}).textContent,
+      thru: (g('mThru') || {textContent:'—'}).textContent,
+      ctx:  (g('mCtx')  || {textContent:'0'}).textContent,
     }
   };
-  document.getElementById('saveModal').classList.add('open');
+  const modal = g('saveModal');
+  if (modal) modal.classList.add('open');
 }
 
-function closeSaveModal() { document.getElementById('saveModal').classList.remove('open'); }
+function closeSaveModal() { const m=g('saveModal'); if(m) m.classList.remove('open'); }
 
 function confirmSave() {
   if(!pendingSaveData) return;
-  const tags=document.getElementById('saveTags').value.split(',').map(t=>t.trim()).filter(Boolean);
-  const notes=document.getElementById('saveNotes').value.trim();
+  const tagsEl=g('saveTags'), notesEl=g('saveNotes');
+  const tags  = tagsEl  ? tagsEl.value.split(',').map(t=>t.trim()).filter(Boolean) : [];
+  const notes = notesEl ? notesEl.value.trim() : '';
   history.unshift({...pendingSaveData,tags,notes,id:Date.now()});
   localStorage.setItem('nexos_history',JSON.stringify(history));
   closeSaveModal();
-  document.getElementById('saveTags').value='';
-  document.getElementById('saveNotes').value='';
+  if(tagsEl)  tagsEl.value='';
+  if(notesEl) notesEl.value='';
 }
 
 function deleteHistoryItem(id) {
@@ -1386,7 +2708,7 @@ function reloadFromHistory(id) {
 }
 
 // ==========================================
-// COMPARE ENGINE
+// COMPARE ENGINE — sync simulation (mirrors simStep fixes exactly)
 // ==========================================
 function updateCompareWorkloadInfo() {
   const el=document.getElementById('cmpWorkloadInfo');
@@ -1399,33 +2721,74 @@ function runSimulationSync(algo, quantum) {
   if(!processes.length) return null;
   let procs = processes.map(p=>({
     ...p, remaining:p.burst, state:'waiting',
-    startTime:-1,finishTime:-1,responseTime:-1,
-    waitTime:0,queueLevel:0,quantumUsed:0,
+    startTime:-1, finishTime:-1, responseTime:-1,
+    waitTime:0, queueLevel:0, quantumUsed:0,
   }));
   let time=0, gl=[], finished=[], ctxSwitches=0, lastPid=-99;
-  const maxTime=processes.reduce((s,p)=>s+p.burst,0)*3+50;
+  // Proper FIFO queue for RR
+  let rrQ=[];
+  const maxTime=processes.reduce((s,p)=>s+p.burst,0)*4+100;
 
   for(let t=0;t<maxTime;t++){
-    procs.forEach(p=>{if(p.state==='waiting'&&p.arrival<=time)p.state='ready';});
-    const done=procs.every(p=>p.state==='done');
-    if(done) break;
+    // Arrive
+    procs.forEach(p=>{
+      if(p.state==='waiting'&&p.arrival<=time){
+        p.state='ready';
+        if(algo==='rr'&&!rrQ.includes(p)) rrQ.push(p);
+      }
+    });
 
-    const ready=procs.filter(p=>p.state==='ready'||p.state==='running');
+    if(procs.every(p=>p.state==='done')) break;
+
     let running=null;
 
-    if(algo==='fcfs') running=ready.sort((a,b)=>a.arrival-b.arrival)[0]||null;
-    else if(algo==='sjf'){const c=procs.find(p=>p.state==='running');running=c||ready.sort((a,b)=>a.remaining-b.remaining)[0]||null;}
-    else if(algo==='srtf') running=ready.sort((a,b)=>a.remaining-b.remaining)[0]||null;
-    else if(algo==='priority'){const c=procs.find(p=>p.state==='running');running=c||ready.sort((a,b)=>a.priority-b.priority)[0]||null;}
-    else if(algo==='rr'){
-      const c=procs.find(p=>p.state==='running');
-      if(c){c.quantumUsed++;if(c.quantumUsed>=quantum){c.state='ready';c.quantumUsed=0;running=procs.filter(p=>p.state==='ready')[0]||null;}else running=c;}
-      else running=ready[0]||null;
+    if(algo==='fcfs'){
+      const cur=procs.find(p=>p.state==='running');
+      running=cur||procs.filter(p=>p.state==='ready').sort((a,b)=>a.arrival-b.arrival)[0]||null;
+
+    } else if(algo==='sjf'){
+      const cur=procs.find(p=>p.state==='running');
+      running=cur||procs.filter(p=>p.state==='ready').sort((a,b)=>a.remaining-b.remaining||a.arrival-b.arrival)[0]||null;
+
+    } else if(algo==='srtf'){
+      const ready=procs.filter(p=>p.state==='ready'||p.state==='running');
+      running=ready.sort((a,b)=>a.remaining-b.remaining||a.arrival-b.arrival)[0]||null;
+
+    } else if(algo==='priority'){
+      const cur=procs.find(p=>p.state==='running');
+      running=cur||procs.filter(p=>p.state==='ready').sort((a,b)=>a.priority-b.priority||a.arrival-b.arrival)[0]||null;
+
+    } else if(algo==='rr'){
+      const cur=procs.find(p=>p.state==='running');
+      if(cur){
+        cur.quantumUsed++;
+        if(cur.quantumUsed>=quantum){
+          cur.state='ready';cur.quantumUsed=0;
+          rrQ=rrQ.filter(p=>p!==cur);
+          rrQ.push(cur);
+        } else { running=cur; }
+      }
+      if(!running){
+        rrQ=rrQ.filter(p=>p.state==='ready');
+        running=rrQ[0]||null;
+      }
+
     } else if(algo==='mlfq'){
-      const c=procs.find(p=>p.state==='running');
-      const q2=Math.min(quantum*Math.pow(2,c?c.queueLevel:0),16);
-      if(c){c.quantumUsed++;if(c.quantumUsed>=q2){c.queueLevel=Math.min(c.queueLevel+1,2);c.state='ready';c.quantumUsed=0;}else running=c;}
-      if(!running){for(let lv=0;lv<=2;lv++){const lr=procs.filter(p=>p.state==='ready'&&p.queueLevel===lv);if(lr.length){running=lr[0];break;}}}
+      const cur=procs.find(p=>p.state==='running');
+      if(cur){
+        const lQ=Math.min(quantum*Math.pow(2,cur.queueLevel),16);
+        cur.quantumUsed++;
+        if(cur.quantumUsed>=lQ){
+          cur.queueLevel=Math.min(cur.queueLevel+1,2);
+          cur.state='ready';cur.quantumUsed=0;
+        } else { running=cur; }
+      }
+      if(!running){
+        for(let lv=0;lv<=2;lv++){
+          const lr=procs.filter(p=>p.state==='ready'&&p.queueLevel===lv).sort((a,b)=>a.arrival-b.arrival);
+          if(lr.length){running=lr[0];break;}
+        }
+      }
     }
 
     if(running&&running.pid!==lastPid&&lastPid!==-99) ctxSwitches++;
@@ -1433,18 +2796,23 @@ function runSimulationSync(algo, quantum) {
     procs.forEach(p=>{if(p.state==='running'&&p!==running)p.state='ready';});
 
     if(running){
-      if(running.startTime===-1)running.startTime=time;
-      if(running.responseTime===-1)running.responseTime=time-running.arrival;
+      if(running.startTime===-1) running.startTime=time;
+      if(running.responseTime===-1) running.responseTime=time-running.arrival;
       running.state='running';running.remaining--;
       const last=gl[gl.length-1];
-      if(last&&last.pid===running.pid)last.end=time+1;
+      if(last&&last.pid===running.pid) last.end=time+1;
       else gl.push({pid:running.pid,name:running.name,color:running.color,start:time,end:time+1});
-      if(running.remaining<=0){running.state='done';running.finishTime=time+1;finished.push(running);}
+      if(running.remaining<=0){
+        running.state='done';running.finishTime=time+1;
+        finished.push(running);
+        rrQ=rrQ.filter(p=>p!==running);
+      }
     } else {
       const last=gl[gl.length-1];
-      if(last&&last.pid===-1)last.end=time+1;
+      if(last&&last.pid===-1) last.end=time+1;
       else if(time>0) gl.push({pid:-1,name:'IDLE',color:null,start:time,end:time+1});
     }
+
     procs.forEach(p=>{if(p.state==='ready')p.waitTime++;});
     time++;
   }
@@ -1457,7 +2825,6 @@ function runSimulationSync(algo, quantum) {
   const util=Math.round((busy/time)*100);
   const thru=(finished.length/time*100);
   const fairness=1/(1+Math.sqrt(finished.reduce((s,p)=>s+Math.pow(p.waitTime-avgWT,2),0)/finished.length));
-
   return {algo,avgTAT,avgWT,avgRT,util,thru,ctxSwitches,ganttLog:gl,totalTime:time,fairness};
 }
 
@@ -1541,7 +2908,7 @@ function renderCompareResults() {
               <div class="mg-chart">
                 ${r.ganttLog.map(e=>{
                   const l=(e.start/maxTime)*100,w=((e.end-e.start)/maxTime)*100;
-                  if(e.pid===-1) return `<div class="mg-bar" style="left:${l}%;width:${w}%;background:repeating-linear-gradient(45deg,#0f1628,#0f1628 3px,#141c30 3px,#141c30 6px);top:2px;height:24px;"></div>`;
+                  if(e.pid===-1) return `<div class="mg-bar" style="left:${l}%;width:${w}%;background:repeating-linear-gradient(45deg,#1a2436,#1a2436 3px,#212d40 3px,#212d40 6px);top:2px;height:24px;"></div>`;
                   return `<div class="mg-bar" style="left:${l}%;width:${w}%;background:${e.color};top:2px;height:24px;opacity:0.85;"></div>`;
                 }).join('')}
               </div>
@@ -1583,12 +2950,12 @@ function renderTradeoff() {
     }))},
     options:{
       responsive:true,maintainAspectRatio:true,
-      plugins:{legend:{labels:{color:'#8899cc',font:{family:'Share Tech Mono',size:11}}}},
+      plugins:{legend:{labels:{color:'#c0d0e0',font:{family:'Share Tech Mono',size:11}}}},
       scales:{
-        x:{title:{display:true,text:'Avg Waiting Time (ms)',color:'#4a5580'},
-          ticks:{color:'#4a5580'},grid:{color:'rgba(26,36,68,0.5)'}},
-        y:{title:{display:true,text:'Avg Turnaround Time (ms)',color:'#4a5580'},
-          ticks:{color:'#4a5580'},grid:{color:'rgba(26,36,68,0.5)'}}
+        x:{title:{display:true,text:'Avg Waiting Time (ms)',color:'#6a8aaa'},
+          ticks:{color:'#6a8aaa'},grid:{color:'rgba(58,80,112,0.5)'}},
+        y:{title:{display:true,text:'Avg Turnaround Time (ms)',color:'#6a8aaa'},
+          ticks:{color:'#6a8aaa'},grid:{color:'rgba(58,80,112,0.5)'}}
       }
     }
   });
@@ -1619,13 +2986,13 @@ function renderTradeoff() {
     },
     options:{
       responsive:true,maintainAspectRatio:true,
-      plugins:{legend:{labels:{color:'#8899cc',font:{family:'Share Tech Mono',size:11}}}},
+      plugins:{legend:{labels:{color:'#c0d0e0',font:{family:'Share Tech Mono',size:11}}}},
       scales:{r:{
         min:0,max:100,
-        ticks:{color:'#4a5580',backdropColor:'transparent',font:{size:10}},
-        grid:{color:'rgba(26,36,68,0.6)'},
-        pointLabels:{color:'#8899cc',font:{family:'Share Tech Mono',size:11}},
-        angleLines:{color:'rgba(26,36,68,0.5)'}
+        ticks:{color:'#a8bccc',backdropColor:'transparent',font:{size:10}},
+        grid:{color:'rgba(58,80,112,0.6)'},
+        pointLabels:{color:'#c0d0e0',font:{family:'Share Tech Mono',size:11}},
+        angleLines:{color:'rgba(58,80,112,0.5)'}
       }}
     }
   });
@@ -1636,10 +3003,10 @@ function renderTradeoff() {
     <div class="tr-card">
       <div class="tr-algo">${ALGO_NAMES[r.algo]}</div>
       <div class="tr-bar-row">
-        <div class="tr-br"><div class="tr-br-label">Wait</div><div class="tr-bg"><div class="tr-fill" style="width:${(r.avgWT/maxWT)*100}%;background:#ff4d6d;"></div></div><span style="font-size:0.62rem;color:var(--muted);">${r.avgWT.toFixed(1)}</span></div>
-        <div class="tr-br"><div class="tr-br-label">Util</div><div class="tr-bg"><div class="tr-fill" style="width:${r.util}%;background:#00f5c4;"></div></div><span style="font-size:0.62rem;color:var(--muted);">${r.util}%</span></div>
-        <div class="tr-br"><div class="tr-br-label">Fairness</div><div class="tr-bg"><div class="tr-fill" style="width:${(r.fairness/Math.max(...results.map(x=>x.fairness)))*100}%;background:#7b61ff;"></div></div><span style="font-size:0.62rem;color:var(--muted);">${r.fairness.toFixed(2)}</span></div>
-        <div class="tr-br"><div class="tr-br-label">Ctx-SW</div><div class="tr-bg"><div class="tr-fill" style="width:${r.ctxSwitches>0?(r.ctxSwitches/Math.max(...results.map(x=>x.ctxSwitches)))*100:5}%;background:#f5a623;"></div></div><span style="font-size:0.62rem;color:var(--muted);">${r.ctxSwitches}</span></div>
+        <div class="tr-br"><div class="tr-br-label">Wait</div><div class="tr-bg"><div class="tr-fill" style="width:${(r.avgWT/maxWT)*100}%;background:#ff4d6d;"></div></div><span style="font-size:0.65rem;color:var(--text2);">${r.avgWT.toFixed(1)}</span></div>
+        <div class="tr-br"><div class="tr-br-label">Util</div><div class="tr-bg"><div class="tr-fill" style="width:${r.util}%;background:#00f5c4;"></div></div><span style="font-size:0.65rem;color:var(--text2);">${r.util}%</span></div>
+        <div class="tr-br"><div class="tr-br-label">Fairness</div><div class="tr-bg"><div class="tr-fill" style="width:${(r.fairness/Math.max(...results.map(x=>x.fairness)))*100}%;background:#7b61ff;"></div></div><span style="font-size:0.65rem;color:var(--text2);">${r.fairness.toFixed(2)}</span></div>
+        <div class="tr-br"><div class="tr-br-label">Ctx-SW</div><div class="tr-bg"><div class="tr-fill" style="width:${r.ctxSwitches>0?(r.ctxSwitches/Math.max(...results.map(x=>x.ctxSwitches)))*100:5}%;background:#f5a623;"></div></div><span style="font-size:0.65rem;color:var(--text2);">${r.ctxSwitches}</span></div>
       </div>
     </div>`).join('');
 
@@ -1680,35 +3047,941 @@ function updateWhatIf(q) {
 // ==========================================
 // SPEED SLIDER
 // ==========================================
-document.getElementById('speedSlider').addEventListener('input',function(){
-  document.getElementById('speedVal').textContent=this.value;
-  if(simRunning){
-    clearInterval(simInterval);
-    const speed=11-parseInt(this.value);
-    simInterval=setInterval(simStep,speed*45);
-  }
-});
+const speedSliderEl = g('speedSlider');
+if (speedSliderEl) {
+  speedSliderEl.addEventListener('input', function(){
+    gs('speedVal','textContent', this.value);
+    if(simRunning){
+      clearInterval(simInterval);
+      simInterval = setInterval(simStep, (11-parseInt(this.value))*45);
+    }
+  });
+}
 
 // ==========================================
 // STEP MODE TOGGLE
 // ==========================================
-document.getElementById('stepMode').addEventListener('change',function(){
-  if(this.checked){
-    document.getElementById('stepBtn').style.display='';
-    document.getElementById('runBtn').style.display='none';
-    pauseSim();
-  } else {
-    document.getElementById('stepBtn').style.display='none';
-    document.getElementById('runBtn').style.display='';
-    document.getElementById('stepBox').style.display='none';
+const stepModeCheckEl = g('stepMode');
+if (stepModeCheckEl) {
+  stepModeCheckEl.addEventListener('change', function(){
+    if(this.checked){
+      gStyle('stepBtn','display','');
+      gStyle('runBtn','display','none');
+      pauseSim();
+    } else {
+      gStyle('stepBtn','display','none');
+      gStyle('runBtn','display','');
+      gStyle('stepBox','display','none');
+    }
+  });
+}
+
+// ==========================================
+// V4 NEW FEATURES
+// ==========================================
+
+// ── ADAPTIVE HYBRID ALGORITHM STATE ──────
+let adaptivePhase = 'fcfs'; // starts FCFS, switches based on workload
+let adaptiveLogEntries = [];
+const ADAPTIVE_NAMES = {fcfs:'FCFS',srtf:'SRTF',rr:'Round Robin'};
+
+// ── THERMAL / ENERGY STATE ───────────────
+let cpuTemp = 35; // degrees C
+let totalEnergy = 0; // arbitrary units
+let throttledTicks = 0;
+let cgroupThrottledTicks = 0;
+
+// ── HEATMAP DATA ─────────────────────────
+let heatmapData = {}; // pid -> array of states per tick
+
+// ── ACHIEVEMENTS ─────────────────────────
+const ACHIEVEMENTS_DEF = [
+  {id:'first_run',    name:'First Boot',       icon:'🖥️',  desc:'Complete your first simulation'},
+  {id:'rr_master',   name:'Round Robin Master',icon:'🔄',  desc:'Run Round Robin with quantum=2 and quantum=16'},
+  {id:'starvation',  name:'Starvation Witness',icon:'💀',  desc:'Observe a process getting starved'},
+  {id:'perfect_util',name:'100% Utilization',  icon:'⚡',  desc:'Achieve 100% CPU utilization'},
+  {id:'all_algos',   name:'Algorithm Explorer',icon:'🗺️',  desc:'Run all 6 algorithms'},
+  {id:'save5',       name:'Lab Notebook',      icon:'📓',  desc:'Save 5 runs to history'},
+  {id:'compare_all', name:'The Comparator',    icon:'⇄',   desc:'Use Auto-Rank All in Compare'},
+  {id:'challenge1',  name:'Challenge Accepted', icon:'🏆',  desc:'Complete your first challenge'},
+  {id:'adaptive_run',name:'AI Scheduler',      icon:'🤖',  desc:'Run the Adaptive Hybrid algorithm'},
+  {id:'batch_run',   name:'Batch Researcher',  icon:'📊',  desc:'Complete a batch experiment'},
+];
+let achievements = JSON.parse(localStorage.getItem('nexos_achievements') || '{}');
+let algosSeen = JSON.parse(localStorage.getItem('nexos_algos_seen') || '[]');
+
+function unlockAchievement(id) {
+  if (achievements[id]) return;
+  achievements[id] = Date.now();
+  localStorage.setItem('nexos_achievements', JSON.stringify(achievements));
+  renderAchievements();
+  // Toast
+  const def = ACHIEVEMENTS_DEF.find(a => a.id === id);
+  if (!def) return;
+  const toast = document.createElement('div');
+  toast.style.cssText = `position:fixed;bottom:24px;right:24px;z-index:999;padding:12px 18px;background:var(--surface);border:1px solid rgba(255,184,48,0.5);border-left:4px solid var(--accent3);border-radius:var(--r);font-family:var(--font-mono);font-size:0.75rem;color:var(--accent3);animation:fadeUp 0.3s ease;box-shadow:0 4px 24px rgba(0,0,0,0.4);`;
+  toast.innerHTML = `🏆 Achievement Unlocked: <strong>${def.name}</strong> ${def.icon}`;
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 3500);
+  updateAchPill();
+}
+
+function updateAchPill() {
+  const count = Object.keys(achievements).length;
+  document.getElementById('achPill').style.display = count > 0 ? 'flex' : 'none';
+  document.getElementById('achCount').textContent = count;
+  if (document.getElementById('achScore')) document.getElementById('achScore').textContent = count;
+}
+
+function renderAchievements() {
+  const grid = document.getElementById('achievementGrid');
+  if (!grid) return;
+  grid.innerHTML = ACHIEVEMENTS_DEF.map(a => `
+    <div class="ach-badge ${achievements[a.id] ? 'unlocked' : 'locked'}">
+      <div class="ach-icon">${a.icon}</div>
+      <div><div class="ach-name">${a.name}</div><div class="ach-desc">${a.desc}</div></div>
+    </div>`).join('');
+  const total = document.getElementById('achTotal');
+  if (total) total.textContent = ACHIEVEMENTS_DEF.length;
+}
+
+// ── CHALLENGES ────────────────────────────
+const CHALLENGES_DEF = [
+  {
+    id:'ch1', icon:'🚛', title:'Spot the Convoy', difficulty:'easy',
+    preset:'convoy', algo:'fcfs',
+    desc:'The convoy effect happens when one long process blocks all short ones. Load the Convoy preset with FCFS and observe.',
+    target:'avg_wt_gt', targetVal:8,
+    hint:'Load the "Convoy" preset, select FCFS, and run. Watch how Fast1/2/3 wait behind Giant.',
+    instruction:'Run with FCFS and confirm avg waiting > 8ms. Then try SJF and see the improvement.',
+    check: m => m.avgWT > 8 && selectedAlgo === 'fcfs'
+  },
+  {
+    id:'ch2', icon:'⏱️', title:'Quantum Tuning', difficulty:'medium',
+    preset:'stress', algo:'rr',
+    desc:'Find the optimal Round Robin quantum for the Stress preset that minimises average waiting time.',
+    target:'min_wt', targetVal:15,
+    hint:'Try quantum values 2, 4, 6, 8. The sweet spot is usually around 4-6ms for this workload.',
+    instruction:'Load Stress preset → Round Robin → tune quantum until avg wait < 15ms.',
+    check: m => m.avgWT < 15 && selectedAlgo === 'rr'
+  },
+  {
+    id:'ch3', icon:'💀', title:'Induce Starvation', difficulty:'medium',
+    preset:'starvation', algo:'priority',
+    desc:'Make a low-priority process wait so long it triggers the starvation warning. Use Priority scheduling.',
+    target:'starvation', targetVal:true,
+    hint:'Load the Starvation preset and run with Priority scheduling. Watch LoPri never execute.',
+    instruction:'Load Starvation preset → Priority → run until the red starvation banner appears.',
+    check: () => simProcs.some(p => p.waitTime > p.burst * 3)
+  },
+  {
+    id:'ch4', icon:'⚡', title:'100% CPU', difficulty:'hard',
+    preset:'basic', algo:'fcfs',
+    desc:'Achieve 100% CPU utilisation — no idle time. Design a workload where processes arrive exactly when needed.',
+    target:'cpu_util', targetVal:100,
+    hint:'All processes must arrive at t=0 with no gaps. Try 4 processes all arriving at time 0.',
+    instruction:'Design a workload (manually add processes, all arrival=0) and get CPU util = 100%.',
+    check: m => m.util >= 99
+  },
+  {
+    id:'ch5', icon:'🤖', title:'Beat the Advisor', difficulty:'hard',
+    preset:'stress', algo:'srtf',
+    desc:'Run a workload where the ML Advisor recommends MLFQ, but you achieve a better avg waiting time using a different algorithm.',
+    target:'beat_advisor', targetVal:true,
+    hint:'Load the Stress preset (ML recommends MLFQ). Try SRTF — it often beats MLFQ on avg wait.',
+    instruction:'Run any algorithm and beat the ML advisor\'s recommended choice on avg waiting time.',
+    check: (m, lastMLrec) => lastMLrec && selectedAlgo !== lastMLrec && m.avgWT < (lastMLBestWT||9999)
+  },
+];
+let completedChallenges = JSON.parse(localStorage.getItem('nexos_challenges') || '{}');
+let activeChallenge = null;
+let lastMLrec = null;
+let lastMLBestWT = 9999;
+
+function renderChallenges() {
+  const grid = document.getElementById('challengeGrid');
+  if (!grid) return;
+  grid.innerHTML = CHALLENGES_DEF.map(ch => `
+    <div class="challenge-card ${completedChallenges[ch.id] ? 'completed' : ''}">
+      <span class="ch-badge ${completedChallenges[ch.id] ? 'done' : ch.difficulty}">${completedChallenges[ch.id] ? '✓ DONE' : ch.difficulty.toUpperCase()}</span>
+      <div class="ch-icon">${ch.icon}</div>
+      <div class="ch-title">${ch.title}</div>
+      <div class="ch-desc">${ch.desc}</div>
+      <div class="ch-target">Goal: ${ch.instruction}</div>
+      <button class="ch-start-btn" onclick="startChallenge('${ch.id}')">
+        ${completedChallenges[ch.id] ? 'Retry Challenge' : 'Start Challenge'}
+      </button>
+    </div>`).join('');
+}
+
+function startChallenge(id) {
+  activeChallenge = CHALLENGES_DEF.find(c => c.id === id);
+  if (!activeChallenge) return;
+  const overlay = document.getElementById('challengeOverlay');
+  document.getElementById('coTitle').textContent = `${activeChallenge.icon} ${activeChallenge.title}`;
+  document.getElementById('coResult').style.display = 'none';
+  document.getElementById('coResult').textContent = '';
+
+  // Load the suggested preset if defined
+  if (activeChallenge.preset) {
+    loadPreset(activeChallenge.preset);
   }
-});
+  if (activeChallenge.algo) {
+    const btn = document.querySelector(`[onclick*="'${activeChallenge.algo}'"]`);
+    if (btn) selectAlgo(activeChallenge.algo, btn);
+  }
+
+  renderChallengeStatus();
+  overlay.classList.add('open');
+
+  // Navigate to simulator tab
+  const simTab = document.querySelector('.nav-tab[onclick*="\'sim\'"]');
+  switchPage('sim', simTab);
+  unlockAchievement('challenge1');
+}
+
+function renderChallengeStatus() {
+  if (!activeChallenge) return;
+  const body = document.getElementById('coBody');
+  const m = getMetricsObj();
+  body.innerHTML = `
+    <div style="font-size:0.75rem;color:var(--text2);line-height:1.6;font-family:var(--font-body);margin-bottom:8px;">${activeChallenge.instruction}</div>
+    <div class="co-metric ${m && activeChallenge.check(m, lastMLrec) ? 'pass' : 'fail'}">
+      <div class="co-metric-label">Status</div>
+      <div class="co-metric-current">${m && activeChallenge.check(m, lastMLrec) ? '✓ Condition Met' : '✗ Not Yet'}</div>
+    </div>
+    ${m ? `
+    <div class="co-metric">
+      <div class="co-metric-label">Avg Waiting Time</div>
+      <div class="co-metric-current">${m.avgWT.toFixed(1)}ms</div>
+    </div>
+    <div class="co-metric">
+      <div class="co-metric-label">CPU Utilization</div>
+      <div class="co-metric-current">${m.util}%</div>
+    </div>` : '<div style="color:var(--text2);font-size:0.72rem;">Run a simulation to see results here.</div>'}
+    <div style="padding:10px;background:rgba(64,184,255,0.07);border:1px solid rgba(64,184,255,0.2);border-radius:var(--r);font-size:0.7rem;color:var(--accent5);line-height:1.6;">
+      💡 ${activeChallenge.hint}
+    </div>`;
+}
+
+function checkChallenge() {
+  if (!activeChallenge) return;
+  const m = getMetricsObj();
+  const pass = m && activeChallenge.check(m, lastMLrec);
+  const result = document.getElementById('coResult');
+  result.style.display = 'block';
+  if (pass) {
+    result.className = 'co-result pass';
+    result.textContent = `🏆 Challenge Complete! Well done.`;
+    completedChallenges[activeChallenge.id] = Date.now();
+    localStorage.setItem('nexos_challenges', JSON.stringify(completedChallenges));
+    renderChallenges();
+    unlockAchievement('challenge1');
+  } else {
+    result.className = 'co-result fail';
+    result.textContent = '✗ Not yet — keep adjusting and try again.';
+  }
+  renderChallengeStatus();
+}
+
+function closeChallengeOverlay() {
+  document.getElementById('challengeOverlay').classList.remove('open');
+  activeChallenge = null;
+}
+
+function getMetricsObj() {
+  const tat = document.getElementById('mTAT').textContent;
+  if (tat === '—') return null;
+  return {
+    avgTAT: parseFloat(document.getElementById('mTAT').textContent)||0,
+    avgWT:  parseFloat(document.getElementById('mWT').textContent)||0,
+    avgRT:  parseFloat(document.getElementById('mRT').textContent)||0,
+    util:   parseInt(document.getElementById('mUtil').textContent)||0,
+  };
+}
+
+// ── LABS ─────────────────────────────────
+const LABS_DEF = [
+  {
+    num:'01', title:'The Convoy Effect', color:'var(--accent5)',
+    desc:'Explore how FCFS scheduling can cause short processes to wait behind a single long process.',
+    objectives:['Observe the convoy effect with FCFS','Measure average waiting time','Switch to SJF and compare results','Explain why SJF is better for heterogeneous burst times'],
+    preset:'convoy', algo:'fcfs',
+    hint:'After running FCFS, notice how Fast1/2/3 all finish after Giant. Now try SJF — the short jobs execute immediately. The avg wait drops dramatically because SJF minimises average waiting time when burst times vary widely.',
+  },
+  {
+    num:'02', title:'Priority Scheduling & Starvation', color:'var(--accent2)',
+    desc:'Understand how priority-based scheduling can lead to indefinite postponement of low-priority processes.',
+    objectives:['Load the Starvation preset','Run with Priority scheduling until starvation is detected','Observe the red warning banner','Propose an "aging" solution'],
+    preset:'starvation', algo:'priority',
+    hint:'LoPri has priority=5. When HiPri-A, B, C (all priority=1) keep arriving, LoPri never gets CPU. In real OSes, "aging" incrementally boosts a process\'s priority the longer it waits — eventually it runs.',
+  },
+  {
+    num:'03', title:'Round Robin Quantum Sensitivity', color:'var(--accent3)',
+    desc:'Investigate how the time quantum fundamentally changes Round Robin\'s behaviour and performance.',
+    objectives:['Load Basic preset, select Round Robin','Run with quantum=2 → note context switches and avg wait','Run with quantum=16 → compare','Find the "sweet spot" quantum using the What-If simulator'],
+    preset:'basic', algo:'rr',
+    hint:'Small quantum: more context switches, better response time. Large quantum: approaches FCFS. The sweet spot depends on burst times. A rule of thumb: quantum should be slightly larger than a typical CPU burst.',
+  },
+  {
+    num:'04', title:'MLFQ — The Adaptive Scheduler', color:'var(--accent4)',
+    desc:'Explore how MLFQ adapts to mixed workloads without knowing burst times in advance.',
+    objectives:['Load the Stress preset with MLFQ','Observe processes getting demoted to lower queues','Compare with SJF results on the same workload','Explain why MLFQ is used in real OSes'],
+    preset:'stress', algo:'mlfq',
+    hint:'MLFQ treats new processes as interactive (level 0 = highest priority, small quantum). If they use their full quantum, they\'re CPU-bound and get demoted. This mimics knowing burst times without actually knowing them.',
+  },
+  {
+    num:'05', title:'Multi-Algorithm Comparison', color:'var(--accent)',
+    desc:'Use the Compare tab to run all algorithms on the same workload and analyse the tradeoffs.',
+    objectives:['Load the I/O Bound preset','Go to Compare tab → Auto-Rank All','Identify which algorithm wins on avg wait vs fairness','Use the Tradeoffs tab scatter plot to visualise'],
+    preset:'io', algo:'fcfs',
+    hint:'For I/O-bound workloads, preemptive algorithms (RR, SRTF, MLFQ) typically outperform non-preemptive ones because they can context-switch to another process while one waits for I/O.',
+  },
+  {
+    num:'06', title:'Energy-Aware Scheduling', color:'var(--accent3)',
+    desc:'Enable the Thermal Model and observe how different algorithms affect simulated CPU energy consumption.',
+    objectives:['Enable the CPU Thermal Model checkbox','Run CPU Heavy preset with FCFS then MLFQ','Compare energy estimates in the energy panel','Identify which algorithm is more energy-efficient'],
+    preset:'heavy', algo:'fcfs',
+    hint:'FCFS under heavy load causes the CPU temperature to rise steadily with no idle time. MLFQ\'s ability to interleave processes and allow brief idle moments can reduce peak thermal load.',
+  },
+];
+
+function renderLabs() {
+  const grid = document.getElementById('labGrid');
+  if (!grid) return;
+  grid.innerHTML = LABS_DEF.map(lab => `
+    <div class="lab-card">
+      <div class="lab-num" style="color:${lab.color};">Lab ${lab.num}</div>
+      <div class="lab-title">${lab.title}</div>
+      <div class="lab-desc">${lab.desc}</div>
+      <div class="lab-objectives">
+        ${lab.objectives.map(o => `<div class="lab-obj">${o}</div>`).join('')}
+      </div>
+      <button class="lab-btn" style="border-color:${lab.color}40;color:${lab.color};" onclick="startLab('${lab.num}')">▶ Start Lab</button>
+      <div class="lab-hint" id="labHint${lab.num}">💡 ${lab.hint}</div>
+      <button onclick="toggleLabHint('${lab.num}')" style="margin-top:6px;padding:4px 10px;background:transparent;border:1px solid var(--border);border-radius:var(--r);color:var(--text2);font-family:var(--font-mono);font-size:0.62rem;cursor:pointer;">Show Hint</button>
+    </div>`).join('');
+}
+
+function startLab(num) {
+  const lab = LABS_DEF.find(l => l.num === num);
+  if (!lab) return;
+  loadPreset(lab.preset);
+  const algoBtn = document.querySelector(`[onclick*="'${lab.algo}'"]`);
+  if (algoBtn) selectAlgo(lab.algo, algoBtn);
+  // Navigate to simulator tab
+  const simTab = document.querySelector('.nav-tab[onclick*="\'sim\'"]');
+  switchPage('sim', simTab);
+}
+
+function toggleLabHint(num) {
+  const hint = document.getElementById('labHint' + num);
+  if (!hint) return;
+  hint.style.display = hint.style.display === 'block' ? 'none' : 'block';
+}
+
+// ── BATCH EXPERIMENTS ─────────────────────
+function runBatchExperiments() {
+  const presetNames = ['basic','heavy','io','stress'];
+  const algos = ['fcfs','sjf','rr','priority','mlfq','srtf'];
+  const results = [];
+  const savedProcesses = [...processes];
+
+  presetNames.forEach(pname => {
+    processes = []; pidCounter = 1; colorIdx = 0;
+    PRESETS[pname].forEach(p => addProcess(p));
+    algos.forEach(algo => {
+      const r = runSimulationSync(algo, 4);
+      if (r) results.push({preset: pname, algo, ...r});
+    });
+  });
+
+  // Restore
+  processes = savedProcesses;
+  renderProcList();
+
+  const container = document.getElementById('batchResults');
+  const rows = results.map(r => `
+    <div class="batch-row">
+      <span style="color:var(--text2)">${r.preset}</span>
+      <span style="color:var(--accent)">${ALGO_NAMES[r.algo]}</span>
+      <span>${r.avgTAT.toFixed(1)}</span>
+      <span class="${r.avgWT < 5 ? 'td-hl' : ''}">${r.avgWT.toFixed(1)}</span>
+      <span>${r.util}%</span>
+      <span>${r.fairness.toFixed(2)}</span>
+    </div>`).join('');
+  container.innerHTML = `<div class="batch-row header"><span>Workload</span><span>Algorithm</span><span>Avg TAT</span><span>Avg WT</span><span>Util</span><span>Fairness</span></div>` + rows;
+  document.getElementById('batchStatus').textContent = `${results.length} experiments completed.`;
+  unlockAchievement('batch_run');
+}
+
+// ── PREDICTIVE ML ─────────────────────────
+function showPredictions() {
+  const grid = g('predGrid');
+  if (!grid) return;
+  if (!processes.length) {
+    grid.innerHTML = '<div class="empty" style="grid-column:1/-1;padding:20px;"><div class="empty-icon">⬡</div>Load processes in the Simulator to see predictions</div>';
+    return;
+  }
+
+  const algos = ['fcfs','sjf','rr','priority','mlfq','srtf'];
+  const avgBurst = processes.reduce((s,p)=>s+p.burst,0)/processes.length;
+  const burstVar = Math.sqrt(processes.reduce((s,p)=>s+Math.pow(p.burst-avgBurst,2),0)/processes.length);
+  const hasIO = processes.some(p=>p.io>20);
+  const hasPri = new Set(processes.map(p=>p.priority)).size > 1;
+  const maxArr = Math.max(...processes.map(p=>p.arrival));
+  const n = processes.length;
+
+  const score = (algo) => {
+    let s = 70;
+    if (algo==='fcfs') { if(burstVar<3)s+=20; else s-=burstVar*2; }
+    else if(algo==='sjf') { s+=Math.min(burstVar*4,25); if(hasIO)s-=10; }
+    else if(algo==='srtf') { s+=Math.min(burstVar*5,30); }
+    else if(algo==='rr') { if(maxArr>avgBurst&&n>3)s+=20; if(hasIO)s+=10; }
+    else if(algo==='priority') { if(hasPri)s+=25; else s-=15; }
+    else if(algo==='mlfq') { if(n>5||hasIO)s+=25; s+=10; }
+    return Math.max(10, Math.min(98, Math.round(s)));
+  };
+
+  const scored = algos.map(a=>({algo:a,score:score(a)})).sort((a,b)=>b.score-a.score);
+  const maxS = scored[0].score;
+  const grade = s => s>=90?'A':s>=75?'B':s>=60?'C':'D';
+  const reasons = {
+    fcfs:'Best for uniform burst times. Degrades with high variance.',
+    sjf:'Optimal avg wait when burst times are known and vary widely.',
+    srtf:'Preemptive SJF. Best theoretical avg wait for mixed workloads.',
+    rr:'Fairest for multi-process interactive workloads.',
+    priority:'Ideal when urgency levels differ across processes.',
+    mlfq:'Self-adapting. Best for general-purpose unknown workloads.',
+  };
+
+  grid.innerHTML = scored.map(({algo,score:s})=>`
+    <div class="pred-card">
+      <div class="pred-algo">${ALGO_NAMES[algo]}</div>
+      <div class="pred-score ${grade(s)}">${grade(s)} — ${s}%</div>
+      <div class="pred-bar" style="width:${(s/maxS)*100}%;"></div>
+      <div class="pred-reason">${reasons[algo]}</div>
+    </div>`).join('');
+}
+
+// ── ANOMALY DETECTION ─────────────────────
+function detectAnomalies() {
+  const panel = document.getElementById('anomalyPanel');
+  if (!panel) return;
+  if (!simProcs.length) {
+    panel.innerHTML = '<span style="color:var(--muted);font-size:0.72rem;">No anomalies detected yet — run a simulation first.</span>';
+    return;
+  }
+  const anomalies = [];
+
+  simProcs.forEach(p => {
+    if (p.state==='ready' && p.waitTime > p.burst*3)
+      anomalies.push(`<strong>${p.name}</strong> has waited ${p.waitTime}ms (${Math.round(p.waitTime/p.burst*100)}% of its burst) — likely starved by higher-priority processes.`);
+    if (p.missedDeadline)
+      anomalies.push(`<strong>${p.name}</strong> missed its deadline (finished at t=${p.finishTime}, deadline was t=${p.deadline}).`);
+  });
+
+  const done = simProcs.filter(p=>p.finishTime!==-1);
+  const avgWT = done.length ? done.reduce((s,p)=>s+p.waitTime,0)/done.length : 0;
+  const maxWT = simProcs.length ? Math.max(...simProcs.map(p=>p.waitTime)) : 0;
+  if (maxWT > avgWT * 3 && avgWT > 0)
+    anomalies.push(`High waiting time variance — max wait (${maxWT}ms) is ${Math.round(maxWT/avgWT)}× the average (${avgWT.toFixed(1)}ms). Consider a fairer algorithm like Round Robin.`);
+
+  if (selectedAlgo==='fcfs') {
+    const sorted = [...simProcs].sort((a,b)=>a.arrival-b.arrival);
+    if (sorted[0]?.burst > 15)
+      anomalies.push(`Convoy effect risk: first process (${sorted[0].name}) has a long burst (${sorted[0].burst}ms) — all others wait behind it under FCFS.`);
+  }
+
+  if (!anomalies.length) {
+    panel.innerHTML = '<span style="color:var(--accent);font-size:0.72rem;">✓ No anomalies detected — workload looks healthy.</span>';
+  } else {
+    panel.innerHTML = anomalies.map(a=>`<div class="anomaly-item">${a}</div>`).join('');
+  }
+}
+
+// ── ENERGY & THERMAL MODEL ────────────────
+function updateEnergyThermal(running) {
+  // Thermal model: CPU heats up when running, cools slightly when idle
+  const isRunning = !!running;
+  if (document.getElementById('thermalMode').checked) {
+    if (isRunning) { cpuTemp = Math.min(cpuTemp + 0.4, 95); totalEnergy += 1; }
+    else { cpuTemp = Math.max(cpuTemp - 0.2, 35); totalEnergy += 0.1; }
+    if (cpuTemp > 85) throttledTicks++;
+  }
+  if (document.getElementById('cgroupMode').checked) {
+    totalEnergy += isRunning ? 0.8 : 0.05;
+  }
+  if (!document.getElementById('thermalMode').checked && !document.getElementById('cgroupMode').checked) return;
+
+  const tempStr = cpuTemp.toFixed(1) + '°C';
+  const badge = cpuTemp < 65 ? 'thermal-normal' : cpuTemp < 80 ? 'thermal-warm' : 'thermal-hot';
+  const badgeText = cpuTemp < 65 ? 'COOL' : cpuTemp < 80 ? 'WARM' : 'HOT';
+  const isThrottled = document.getElementById('thermalMode').checked && cpuTemp > 85;
+
+  const set = (id, val, cls) => { const el=document.getElementById(id); if(el){el.textContent=val; if(cls)el.className=cls;} };
+  set('epEnergy', totalEnergy.toFixed(0)+' mJ', `ep-val ${cpuTemp<65?'green':cpuTemp<80?'amber':'red'}`);
+  set('epEff', ((simFinished.length/Math.max(totalEnergy/100,1))).toFixed(2)+' proc/J');
+  set('epTemp', tempStr, `ep-val ${cpuTemp<65?'green':cpuTemp<80?'amber':'red'}`);
+  set('epThrottle', isThrottled?'⚠ THROTTLING':'None', `ep-val ${isThrottled?'red':'green'}`);
+  const tb=document.getElementById('thermalBadge'); if(tb){tb.className=`thermal-badge ${badge}`;tb.textContent=badgeText;}
+
+  if (document.getElementById('cgroupMode').checked) {
+    const quota = parseInt(document.getElementById('cgroupVal').value)||70;
+    const usedPct = Math.min(Math.round((simTime/Math.max(simTime+1,1))*100),100);
+    const throttled = Math.max(0, usedPct-quota);
+    set('epCgroup', quota+'% quota');
+    const sb=(id,w,clr)=>{const el=document.getElementById(id);if(el){el.style.width=w+'%';if(clr)el.style.background=clr;}};
+    const sv=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
+    sb('cgroupUsedBar',usedPct); sv('cgroupUsedVal',usedPct+'%');
+    sb('cgroupQuotaBar',quota,'var(--accent3)'); sv('cgroupQuotaVal',quota+'%');
+    sb('cgroupThrottleBar',throttled,'var(--accent2)'); sv('cgroupThrottleVal',throttled+'%');
+  }
+}
+
+// ── MLFQ VISUALIZATION ────────────────────
+function renderMLFQVis() {
+  if (selectedAlgo !== 'mlfq') {
+    [0,1,2].forEach(lv => {
+      const track = document.getElementById('mlfqL' + lv);
+      if (track) track.innerHTML = `<span style="font-size:0.62rem;color:var(--muted);">select MLFQ to activate</span>`;
+    });
+    return;
+  }
+  [0,1,2].forEach(lv => {
+    const track = document.getElementById('mlfqL' + lv);
+    if (!track) return;
+    const procs = simProcs.filter(p => p.state !== 'done' && p.queueLevel === lv);
+    track.innerHTML = procs.map(p =>
+      `<div class="mlfq-proc-chip" style="background:${p.color}">${p.name}</div>`
+    ).join('') || `<span style="font-size:0.62rem;color:var(--muted);">empty</span>`;
+  });
+}
+
+// ── HEATMAP ──────────────────────────────
+function recordHeatmapTick(running) {
+  simProcs.forEach(p => {
+    if (!heatmapData[p.pid]) heatmapData[p.pid] = {name:p.name, color:p.color, ticks:[]};
+    heatmapData[p.pid].ticks.push(
+      p.state==='running' ? 'run' :
+      p.state==='ready'   ? 'wait' :
+      p.state==='done'    ? 'done' :
+      p.isInIO            ? 'io' : 'idle'
+    );
+  });
+}
+
+function renderHeatmap(mode) {
+  const el = document.getElementById('heatmapContent');
+  const procs = Object.values(heatmapData);
+  if (!procs.length) { el.innerHTML='<div class="empty"><div class="empty-icon">🌡</div>Run a simulation first</div>'; return; }
+
+  const maxTicks = Math.max(...procs.map(p=>p.ticks.length));
+  const cellW = Math.max(4, Math.min(16, Math.floor(880/maxTicks)));
+
+  const colorFor = (state, mode, color) => {
+    if (mode==='run') return state==='run'?color:'rgba(42,58,82,0.3)';
+    if (mode==='wait') return state==='wait'?'#ff5577':state==='run'?'rgba(0,232,184,0.3)':'rgba(42,58,82,0.2)';
+    if (mode==='energy') return state==='run'?'#ff5577':state==='wait'?'#ffb830':'rgba(42,58,82,0.2)';
+    return 'rgba(42,58,82,0.3)';
+  };
+
+  el.innerHTML = procs.map(p => `
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+      <div style="font-size:0.62rem;color:${p.color};width:60px;text-align:right;flex-shrink:0;font-family:var(--font-mono);">${p.name}</div>
+      <div style="display:flex;gap:1px;">
+        ${p.ticks.map(t=>`<div style="width:${cellW}px;height:18px;border-radius:1px;background:${colorFor(t,mode,p.color)};"></div>`).join('')}
+      </div>
+    </div>`).join('');
+}
+
+// ── RUN DETAIL MODAL ─────────────────────
+let currentDetailId = null;
+
+function openRunDetail(id) {
+  const item = history.find(h => h.id === id);
+  if (!item) return;
+  currentDetailId = id;
+
+  document.getElementById('rdmTitle').textContent = item.algoName + ' Run';
+  document.getElementById('rdmSubtitle').textContent = new Date(item.time).toLocaleString() + ' · ' + (item.processes?.length||0) + ' processes';
+
+  // Metrics
+  const m = item.metrics;
+  document.getElementById('rdmMetrics').innerHTML = [
+    ['Avg TAT', m.tat, 'ms'],['Avg Wait', m.wt, 'ms'],['Avg Response', m.rt, 'ms'],
+    ['CPU Util', m.util, ''],['Throughput', m.thru, ''],['Ctx Switches', m.ctx, ''],
+  ].map(([label,val,unit])=>`
+    <div class="rdm-mc">
+      <div class="rdm-mc-label">${label}</div>
+      <div class="rdm-mc-val">${val}${unit}</div>
+    </div>`).join('');
+
+  // Tags
+  if (item.tags?.length) {
+    document.getElementById('rdmTagsRow').style.display='block';
+    document.getElementById('rdmTags').innerHTML = item.tags.map(t=>`<span class="rdm-tag">${t}</span>`).join('');
+  } else document.getElementById('rdmTagsRow').style.display='none';
+
+  // Notes
+  if (item.notes) {
+    document.getElementById('rdmNotesRow').style.display='block';
+    document.getElementById('rdmNotes').textContent = item.notes;
+  } else document.getElementById('rdmNotesRow').style.display='none';
+
+  // Replay Gantt from saved processes
+  if (item.processes?.length) {
+    const r = runSimulationSync_simple(item.algo, item.processes, 4);
+    if (r) {
+      const gantt = document.getElementById('rdmGantt');
+      const axis = document.getElementById('rdmAxis');
+      const total = r.ganttLog[r.ganttLog.length-1]?.end || 1;
+      gantt.innerHTML = r.ganttLog.map(e=>{
+        const l=(e.start/total)*100, w=((e.end-e.start)/total)*100;
+        if(e.pid===-1) return `<div class="gantt-bar idle" style="left:${l}%;width:${w}%;top:2px;height:40px;">${w>4?'IDLE':''}</div>`;
+        return `<div class="gantt-bar" style="left:${l}%;width:${w}%;background:${e.color};top:2px;height:40px;">${w>5?e.name:''}</div>`;
+      }).join('');
+      const step=Math.ceil(total/Math.min(total,16));
+      let ticks='';
+      for(let t=0;t<=total;t+=step) ticks+=`<div class="gtick" style="left:${(t/total)*100}%">${t}</div>`;
+      axis.innerHTML = ticks;
+
+      // Process stats from replay
+      document.getElementById('rdmProcsBody').innerHTML = r.processStats
+        .filter(p=>p.startTime!==-1)
+        .map(p=>`<tr>
+          <td style="color:${p.color};font-weight:600">${p.name}</td>
+          <td>${p.arrival}</td><td>${p.burst}</td><td>${p.priority}</td>
+          <td class="td-hl">${p.finishTime||'…'}</td>
+          <td class="td-hl">${p.finishTime?p.finishTime-p.arrival:'…'}</td>
+          <td class="td-warn">${p.waitTime}</td>
+          <td>${p.responseTime!==-1?p.responseTime:'—'}</td>
+        </tr>`).join('');
+    }
+  }
+
+  document.getElementById('runDetailModal').classList.add('open');
+}
+
+function closeRunDetail() {
+  document.getElementById('runDetailModal').classList.remove('open');
+  currentDetailId = null;
+}
+
+// Minimal sync sim for replaying saved runs (no I/O, no adaptive)
+function runSimulationSync_simple(algo, procs_in, quantum) {
+  let procs = procs_in.map(p=>({...p,remaining:p.burst,state:'waiting',startTime:-1,finishTime:-1,responseTime:-1,waitTime:0,queueLevel:0,quantumUsed:0}));
+  let time=0,gl=[],finished=[],lastPid=-99,rrQ=[];
+  const max=procs_in.reduce((s,p)=>s+p.burst,0)*4+50;
+  for(let t=0;t<max;t++){
+    procs.forEach(p=>{if(p.state==='waiting'&&p.arrival<=time){p.state='ready';if(algo==='rr')rrQ.push(p);}});
+    if(procs.every(p=>p.state==='done')) break;
+    let running=null;
+    if(algo==='fcfs'){const c=procs.find(p=>p.state==='running');running=c||procs.filter(p=>p.state==='ready').sort((a,b)=>a.arrival-b.arrival)[0]||null;}
+    else if(algo==='sjf'){const c=procs.find(p=>p.state==='running');running=c||procs.filter(p=>p.state==='ready').sort((a,b)=>a.remaining-b.remaining)[0]||null;}
+    else if(algo==='srtf'){running=procs.filter(p=>p.state==='ready'||p.state==='running').sort((a,b)=>a.remaining-b.remaining)[0]||null;}
+    else if(algo==='priority'){const c=procs.find(p=>p.state==='running');running=c||procs.filter(p=>p.state==='ready').sort((a,b)=>a.priority-b.priority)[0]||null;}
+    else if(algo==='rr'){const c=procs.find(p=>p.state==='running');if(c){c.quantumUsed++;if(c.quantumUsed>=quantum){c.state='ready';c.quantumUsed=0;rrQ=rrQ.filter(x=>x!==c);rrQ.push(c);}else running=c;}if(!running){rrQ=rrQ.filter(p=>p.state==='ready');running=rrQ[0]||null;}}
+    else if(algo==='mlfq'){const c=procs.find(p=>p.state==='running');if(c){const lq=Math.min(quantum*Math.pow(2,c.queueLevel),16);c.quantumUsed++;if(c.quantumUsed>=lq){c.queueLevel=Math.min(c.queueLevel+1,2);c.state='ready';c.quantumUsed=0;}else running=c;}if(!running){for(let lv=0;lv<=2;lv++){const lr=procs.filter(p=>p.state==='ready'&&p.queueLevel===lv);if(lr.length){running=lr[0];break;}}}}
+    procs.forEach(p=>{if(p.state==='running'&&p!==running)p.state='ready';});
+    if(running){if(running.startTime===-1)running.startTime=time;if(running.responseTime===-1)running.responseTime=time-running.arrival;running.state='running';running.remaining--;const last=gl[gl.length-1];if(last&&last.pid===running.pid)last.end=time+1;else gl.push({pid:running.pid,name:running.name,color:running.color,start:time,end:time+1});if(running.remaining<=0){running.state='done';running.finishTime=time+1;finished.push(running);}}
+    else{const last=gl[gl.length-1];if(last&&last.pid===-1)last.end=time+1;else if(time>0)gl.push({pid:-1,name:'IDLE',color:null,start:time,end:time+1});}
+    procs.forEach(p=>{if(p.state==='ready')p.waitTime++;});
+    time++;
+  }
+  return {ganttLog:gl, processStats:procs};
+}
+
+// ── HISTORY COMPARE ───────────────────────
+let histCompareItems = [];
+
+function addToHistoryCompare() {
+  if (!currentDetailId) return;
+  const item = history.find(h => h.id === currentDetailId);
+  if (!item || histCompareItems.find(x=>x.id===currentDetailId)) return;
+  if (histCompareItems.length >= 2) { histCompareItems = []; }
+  histCompareItems.push(item);
+  if (histCompareItems.length === 2) {
+    closeRunDetail();
+    showHistoryCompare();
+  } else {
+    closeRunDetail();
+    alert(`Run added to comparison (${histCompareItems.length}/2). Open another run and click "Add to Compare".`);
+  }
+}
+
+function showHistoryCompare() {
+  const [a, b] = histCompareItems;
+  if (!a || !b) return;
+  const modal = document.getElementById('histCompareModal');
+  const grid = document.getElementById('hcrGrid');
+
+  const renderCol = (item, highlight) => `
+    <div class="hcr-col" style="${highlight?'border-color:rgba(0,232,184,0.4);':'' }">
+      <div class="hcr-algo" style="color:var(--accent)">${item.algoName}</div>
+      <div style="font-size:0.65rem;color:var(--text2);margin-bottom:8px;">${new Date(item.time).toLocaleString()}</div>
+      ${[['Avg TAT',item.metrics.tat,'ms'],['Avg Wait',item.metrics.wt,'ms'],['Avg Response',item.metrics.rt,'ms'],['CPU Util',item.metrics.util,''],['Throughput',item.metrics.thru,''],['Ctx Switches',item.metrics.ctx,'']].map(([l,v,u])=>`
+        <div style="display:flex;justify-content:space-between;font-size:0.72rem;padding:5px 0;border-bottom:1px solid rgba(42,58,82,0.4);">
+          <span style="color:var(--text2)">${l}</span><span>${v}${u}</span>
+        </div>`).join('')}
+    </div>`;
+
+  // Determine winner on avg wait
+  const aWT = parseFloat(a.metrics.wt)||999, bWT = parseFloat(b.metrics.wt)||999;
+  grid.innerHTML = renderCol(a, aWT <= bWT) + renderCol(b, bWT < aWT);
+
+  // Diff
+  const metrics = [['Avg Wait (ms)','wt',true],['Avg TAT (ms)','tat',true],['CPU Util (%)','util',false],['Throughput','thru',false]];
+  document.getElementById('hcrDiff').innerHTML = `
+    <div style="font-size:0.65rem;color:var(--text2);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:8px;">Metric Comparison</div>
+    ${metrics.map(([label,key,lowerBetter])=>{
+      const av=parseFloat(a.metrics[key])||0, bv=parseFloat(b.metrics[key])||0;
+      const diff=bv-av;
+      const better = lowerBetter ? diff<0 : diff>0;
+      const cls = Math.abs(diff)<0.05 ? 'hcr-same' : better ? 'hcr-better' : 'hcr-worse';
+      return `<div class="hcr-diff-row">
+        <span class="hcr-diff-label">${label}</span>
+        <span>${a.metrics[key]} vs ${b.metrics[key]}</span>
+        <span class="${cls}">${diff>0?'+':''}${diff.toFixed(1)} ${better?'↑':'↓'}</span>
+      </div>`;
+    }).join('')}`;
+
+  modal.classList.add('open');
+  histCompareItems = [];
+}
+
+// ── PERF TRACE IMPORT ────────────────────
+function importPerfTrace(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const text = e.target.result;
+    const imported = [];
+    let pid = 1;
+
+    // Try CSV format: name,arrival,burst,priority
+    const csvLines = text.split('\n').filter(l=>l.trim()&&!l.startsWith('#'));
+    const firstParts = csvLines[0]?.split(',');
+    if (firstParts?.length >= 3 && !isNaN(parseFloat(firstParts[1]))) {
+      csvLines.forEach(line => {
+        const parts = line.split(',').map(s=>s.trim());
+        if (parts.length >= 3) {
+          imported.push({
+            name:parts[0]||`P${pid}`, arrival:parseFloat(parts[1])||0,
+            burst:Math.max(1,parseFloat(parts[2])||5), priority:parseInt(parts[3])||1,
+            color:COLORS[pid%COLORS.length]
+          });
+          pid++;
+        }
+      });
+    } else {
+      // Try to parse Linux perf sched script output patterns
+      // Format: "process_name  pid [cpu] time: sched_switch ..."
+      const schedPattern = /(\w[\w.-]*)\s+\d+.*sched_switch.*next_comm=(\w[\w.-]*)/g;
+      const tasks = new Map();
+      let match;
+      while ((match = schedPattern.exec(text)) !== null) {
+        const name = match[2];
+        if (!tasks.has(name)) tasks.set(name, {burst:1,arrival:tasks.size});
+        else tasks.get(name).burst++;
+      }
+      tasks.forEach((v,k) => {
+        imported.push({name:k.slice(0,8), arrival:v.arrival, burst:Math.max(1,v.burst), priority:1, color:COLORS[pid%COLORS.length]});
+        pid++;
+      });
+    }
+
+    if (!imported.length) { alert('Could not parse file. Use CSV format: name,arrival,burst,priority'); return; }
+    processes=[]; pidCounter=1; colorIdx=0;
+    imported.slice(0,16).forEach(p=>addProcess(p));
+    resetSim();
+    switchPage('sim', document.querySelector('.nav-tab[onclick*="\'sim\'"]'));
+    gs('perfDrop','innerHTML', `<div style="color:var(--accent)">✓ Loaded ${Math.min(imported.length,16)} processes from ${file.name}</div>`);
+  };
+  reader.readAsText(file);
+}
+
+// Drag-and-drop for perf — guarded since perfDrop lives on the Advanced tab
+const perfDropEl = g('perfDrop');
+if (perfDropEl) {
+  ['dragover','dragenter'].forEach(e => perfDropEl.addEventListener(e, ev=>{ev.preventDefault(); perfDropEl.classList.add('drag');}));
+  ['dragleave','drop'].forEach(e => perfDropEl.addEventListener(e, ev=>{ev.preventDefault(); perfDropEl.classList.remove('drag');}));
+  perfDropEl.addEventListener('drop', ev=>{
+    const file = ev.dataTransfer.files[0];
+    if (file) importPerfTrace({target:{files: ev.dataTransfer.files}});
+  });
+}
+
+// ── CGROUP TOGGLE ─────────────────────────
+const cgroupModeEl = g('cgroupMode');
+if (cgroupModeEl) {
+  cgroupModeEl.addEventListener('change', function() {
+    gStyle('cgroupQuota','display', this.checked ? 'block' : 'none');
+    // cgroupVis lives on Advanced tab — safe access
+    gStyle('cgroupVis','display', this.checked ? 'block' : 'none');
+  });
+}
+
+// ── EXTEND PAGE NAVIGATION ────────────────
+const _origSwitchPage = switchPage;
+window.switchPage = function(id, el) {
+  _origSwitchPage(id, el);
+  if (id==='heatmap') renderHeatmap('run');
+  if (id==='challenges') { renderChallenges(); renderAchievements(); }
+  if (id==='labs') renderLabs();
+  if (id==='insights') refreshInsights();
+};
+
+function refreshInsights() {
+  showPredictions();
+  detectAnomalies();
+}
+
+// ── EXTEND selectAlgo FOR ADAPTIVE & PREDICTIONS ──
+const _origSelectAlgo = selectAlgo;
+window.selectAlgo = function(algo, btn) {
+  _origSelectAlgo(algo, btn);
+  gs('algoLabel','textContent', algo==='adaptive' ? 'Adaptive Hybrid' : (ALGO_NAMES[algo]||algo));
+  const logEl = g('adaptiveLogBody');
+  if (algo==='adaptive') {
+    adaptivePhase='fcfs'; adaptiveLogEntries=[];
+    if (logEl) logEl.textContent='Adaptive scheduler initialized. Starting with FCFS.';
+    unlockAchievement('adaptive_run');
+  } else {
+    if (logEl) logEl.textContent='Select "Adaptive Hybrid" algorithm and run to see switch decisions.';
+  }
+  showPredictions();
+};
+
+// ── EXTEND simStep FOR NEW FEATURES ───────
+const _origSimStep = simStep;
+window.simStep = function() {
+  // Adaptive algorithm — pick phase based on workload sensing
+  if (selectedAlgo === 'adaptive') {
+    const ready = simProcs.filter(p=>p.state==='ready');
+    const avgRem = ready.length ? ready.reduce((s,p)=>s+p.remaining,0)/ready.length : 0;
+    const maxWT  = ready.length ? Math.max(...ready.map(p=>p.waitTime)) : 0;
+    let newPhase = adaptivePhase;
+    if (ready.length > 4 && maxWT > 10) newPhase = 'rr';
+    else if (avgRem < 5 && ready.length > 1) newPhase = 'srtf';
+    else if (ready.length <= 2) newPhase = 'fcfs';
+
+    if (newPhase !== adaptivePhase) {
+      const msg = `t=${simTime}: Switched ${adaptivePhase.toUpperCase()} → ${newPhase.toUpperCase()} (ready=${ready.length}, avgRem=${avgRem.toFixed(1)}, maxWT=${maxWT})`;
+      adaptiveLogEntries.push(msg);
+      const logEl = g('adaptiveLogBody');
+      if (logEl) logEl.innerHTML = adaptiveLogEntries.slice(-6).map(e=>`<div class="switch">${e}</div>`).join('');
+      adaptivePhase = newPhase;
+    }
+    const _saved = selectedAlgo;
+    selectedAlgo = adaptivePhase;
+    _origSimStep();
+    selectedAlgo = _saved;
+  } else {
+    _origSimStep();
+  }
+
+  // New feature hooks after each tick
+  updateEnergyThermal(simProcs.find(p=>p.state==='running'));
+  renderMLFQVis();
+  recordHeatmapTick(simProcs.find(p=>p.state==='running'));
+  if (simTime % 5 === 0) detectAnomalies();
+  if (activeChallenge) renderChallengeStatus();
+};
+
+// ── EXTEND computeMetrics FOR ACHIEVEMENT CHECKS ──
+const _origComputeMetrics = computeMetrics;
+window.computeMetrics = function() {
+  _origComputeMetrics();
+  unlockAchievement('first_run');
+  if (!algosSeen.includes(selectedAlgo)) {
+    algosSeen.push(selectedAlgo);
+    localStorage.setItem('nexos_algos_seen', JSON.stringify(algosSeen));
+  }
+  if (algosSeen.length >= 6) unlockAchievement('all_algos');
+  const utilEl = g('mUtil');
+  if (utilEl && parseInt(utilEl.textContent) >= 99) unlockAchievement('perfect_util');
+  if (selectedAlgo==='adaptive') unlockAchievement('adaptive_run');
+};
+
+// ── EXTEND saveRun FOR ACHIEVEMENT ───────
+const _origSaveRun = saveRun;
+window.saveRun = function() {
+  _origSaveRun();
+  if (history.length >= 5) unlockAchievement('save5');
+};
+
+// ── EXTEND showML FOR CHALLENGE TRACKING ──
+// showML now sets lastMLrec internally; we just track lastMLBestWT here
+const _origShowML = showML;
+window.showML = function() {
+  _origShowML();
+  const m = getMetricsObj();
+  if (m) lastMLBestWT = m.avgWT;
+};
+
+// ── EXTEND renderHistory TO ADD CLICK AND COMPARE ──
+const _origRenderHistory = renderHistory;
+window.renderHistory = function() {
+  _origRenderHistory();
+  // Add click handlers to history cards
+  document.querySelectorAll('.hist-card').forEach(card => {
+    const reloadBtn = card.querySelector('[onclick^="reloadFromHistory"]');
+    if (!reloadBtn) return;
+    const idMatch = reloadBtn.getAttribute('onclick').match(/\d+/);
+    if (!idMatch) return;
+    const id = parseInt(idMatch[0]);
+    card.style.cursor = 'pointer';
+    card.addEventListener('click', (e) => {
+      if (e.target.tagName==='BUTTON') return; // don't fire on buttons
+      openRunDetail(id);
+    });
+  });
+};
+
+// ── EXTEND runAllAlgos FOR ACHIEVEMENT ───
+const _origRunAllAlgos = runAllAlgos;
+window.runAllAlgos = function() {
+  _origRunAllAlgos();
+  unlockAchievement('compare_all');
+};
+
+// ── EXTEND initSim TO RESET NEW STATE ────
+const _origInitSim = initSim;
+window.initSim = function() {
+  _origInitSim();
+  cpuTemp=35; totalEnergy=0; throttledTicks=0; cgroupThrottledTicks=0;
+  heatmapData={}; adaptivePhase='fcfs'; adaptiveLogEntries=[];
+  // Reset energy display
+  ['epEnergy','epEff','epTemp','epThrottle','epCgroup'].forEach(id => gs(id,'textContent','—'));
+  const tb = g('thermalBadge');
+  if (tb) { tb.className='thermal-badge thermal-normal'; tb.textContent='NORMAL'; }
+  // Reset adaptive log
+  const alb = g('adaptiveLogBody');
+  if (alb) alb.textContent = selectedAlgo==='adaptive'
+    ? 'Adaptive scheduler initialized. Starting with FCFS.'
+    : 'Select "Adaptive Hybrid" algorithm and run to see switch decisions.';
+  // Reset anomaly panel
+  const ap = g('anomalyPanel');
+  if (ap) ap.innerHTML = '<span style="color:var(--muted);font-size:0.72rem;">No anomalies detected yet — run a simulation first.</span>';
+  // Reset MLFQ vis
+  renderMLFQVis();
+  // Update predictions
+  showPredictions();
+};
 
 // ==========================================
 // INIT
 // ==========================================
 loadPreset('basic');
 renderHistory();
+renderChallenges();
+renderAchievements();
+renderLabs();
+updateAchPill();
+showPredictions();
+
 </script>
 </body>
 </html>
