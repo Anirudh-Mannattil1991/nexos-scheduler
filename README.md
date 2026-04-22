@@ -58,9 +58,9 @@ NexOS is structured around eight tabs, each serving a distinct purpose:
 
 ---
 
-## Judging Criteria Breakdown
+## Aspects of NexOS
 
-### 1. Functionality & Correctness — 40%
+### 1. Functionality & Correctness 
 
 NexOS implements six complete, correct CPU scheduling algorithms — the same algorithms taught in OS courses and used in real kernels:
 
@@ -97,7 +97,7 @@ Three-level queue. New processes enter Level 0 (highest priority). A process usi
 
 ---
 
-### 2. Custom Features — 20%
+### 2. Custom Features
 
 NexOS includes several features that most operating systems and simulators do not expose:
 
@@ -131,7 +131,7 @@ Every saved run stores the full process configuration, all metrics, tags, and no
 
 ---
 
-### 3. Code Quality — 20%
+### 3. Code Quality
 
 **Single-file architecture.** The entire application — 2,400+ lines — is one self-contained HTML file with zero external dependencies except Chart.js (loaded from CDN) and Google Fonts. There is no build step, no bundler, no framework, and no server.
 
@@ -167,7 +167,7 @@ INIT                     — startup sequence
 
 ---
 
-### 4. Explanation & Documentation — 20%
+### 4. Explanation & Documentation 
 
 **In-app Learn page.** NexOS ships with a complete reference guide as its homepage:
 
@@ -289,4 +289,3 @@ Most process scheduler simulators show you a Gantt chart after the fact. NexOS d
 
 ---
 
-*NexOS — Built for the OS Utilities Hackathon*
