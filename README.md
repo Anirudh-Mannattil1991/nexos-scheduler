@@ -18,9 +18,9 @@ No dependencies. No server. Open the HTML file and it runs.
 
 | Resource | Link |
 |---|---|
-| **Live Demo** | *(open `nexos_v5.html` in any browser)* |
+| **Live Demo** | *(https://anirudh-mannattil1991.github.io/nexos-scheduler/)* |
 | **Demo Video** | *(YouTube link — add before submission)* |
-| **GitHub Repository** | *(repo link — add before submission)* |
+| **GitHub Repository** | *(https://github.com/Anirudh-Mannattil1991/nexos-scheduler)* |
 
 ---
 
