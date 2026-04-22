@@ -28,7 +28,7 @@ No dependencies. No server. Open the HTML file and it runs.
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/nexos.git
+git clone https://github.com/Anirudh-Mannattil1991/nexos-scheduler.git
 cd nexos
 
 # Open in browser — no build step, no dependencies
