@@ -1,49 +1,3 @@
-<!--
-============================================================
-NexOS — CPU Scheduling Lab v5
-============================================================
-
-Author: Anirudh Mannattil
-Purpose:
-An interactive simulation platform for visualizing and analyzing
-CPU scheduling algorithms used in operating systems.
-
-Core Features:
-- Real-time CPU scheduling simulation (FCFS, SJF, SRTF, RR, Priority, MLFQ)
-- Animated Gantt chart visualization
-- AI-driven algorithm recommendations and anomaly detection
-- Comparative analytics across algorithms
-- Interactive labs and challenges for learning
-
-System Design Overview:
-NexOS follows a modular front-end architecture:
-
-1. UI Layer (HTML + CSS)
-   - Multi-page layout (Learn, Simulator, Analytics, etc.)
-   - Component-based sections (cards, charts, tables)
-
-2. Simulation Engine (JavaScript)
-   - Core scheduling logic
-   - Tick-based execution system
-   - Process state transitions
-
-3. Analytics Engine
-   - Computes metrics (waiting time, turnaround, fairness)
-   - Generates visual insights
-
-4. AI Insights Layer
-   - Heuristic-based predictions
-   - Detects starvation, convoy effect, inefficiencies
-
-Design Philosophy:
-- Visual-first learning
-- Real-time feedback
-- Bridging theory (OS concepts) with intuition
-
-============================================================
--->
-
-<!-- ================== GLOBAL STYLES ================== -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -79,7 +33,6 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-mono);min-hei
 body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(circle,rgba(0,232,184,0.04) 1px,transparent 1px);background-size:28px 28px;pointer-events:none;z-index:0;}
 .z1{position:relative;z-index:1;height:100vh;display:flex;flex-direction:column;}
 
-<!-- ================== NAVIGATION BAR ================== -->
 /* ── NAV ── */
 nav{display:flex;align-items:center;padding:0 18px;border-bottom:1px solid var(--border);background:rgba(8,12,19,0.98);backdrop-filter:blur(20px);position:relative;z-index:200;height:50px;flex-shrink:0;}
 .nav-logo{font-family:var(--font-display);font-weight:800;font-size:1.2rem;color:var(--accent);text-shadow:0 0 20px rgba(0,232,184,0.4);margin-right:24px;letter-spacing:-0.01em;}
@@ -98,8 +51,6 @@ nav{display:flex;align-items:center;padding:0 18px;border-bottom:1px solid var(-
 .page{display:none;flex:1;overflow:hidden;}
 .page.active{display:flex;flex-direction:column;}
 
-<!-- ================== SIMULATOR PAGE ================== -->
-<!-- Core interactive scheduling engine UI -->
 /* ── SIMULATOR PAGE ── */
 #page-sim{flex-direction:row;}
 .sim-sidebar{width:280px;min-width:280px;border-right:1px solid var(--border);display:flex;flex-direction:column;background:var(--surface);overflow-y:auto;height:100%;flex-shrink:0;}
@@ -239,8 +190,6 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:10px;heigh
 .mpl-del{background:none;border:none;color:var(--muted);cursor:pointer;font-size:0.85rem;padding:2px 6px;transition:color 0.15s;}
 .mpl-del:hover{color:var(--accent2);}
 
-<!-- ================== ANALYTICS PAGE ================== -->
-<!-- Displays performance metrics and charts -->
 /* ── ANALYTICS PAGE ── */
 #page-analytics{flex-direction:column;overflow-y:auto;padding:20px 24px;}
 .analytics-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;}
@@ -306,8 +255,6 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:10px;heigh
 .ic-val{font-size:1.4rem;font-family:var(--font-display);font-weight:700;color:var(--accent);}
 .ic-sub{font-size:0.63rem;color:var(--muted);margin-top:3px;}
 
-<!-- ================== AI INSIGHTS PAGE ================== -->
-<!-- Heuristic-based predictions and anomaly detection -->
 /* ── AI INSIGHTS PAGE ── */
 #page-ai{flex-direction:column;overflow-y:auto;padding:20px 24px;}
 .ai-loading{display:flex;align-items:center;gap:10px;padding:20px;font-size:0.73rem;color:var(--accent4);}
@@ -376,8 +323,6 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:10px;heigh
 .lab-start{width:100%;padding:9px;border:1px solid rgba(155,128,255,0.3);border-radius:var(--r);background:rgba(155,128,255,0.05);color:var(--accent4);font-family:var(--font-mono);font-size:0.68rem;cursor:pointer;transition:all 0.15s;}
 .lab-start:hover{background:var(--accent4);color:#fff;box-shadow:0 0 10px rgba(155,128,255,0.2);}
 
-<!-- ================== COMPARE PAGE ================== -->
-<!-- Runs multiple algorithms side-by-side --> 
 /* ── COMPARE PAGE ── */
 #page-compare{flex-direction:row;overflow:hidden;}
 .compare-sidebar{width:240px;border-right:1px solid var(--border);background:var(--surface);padding:16px;display:flex;flex-direction:column;gap:12px;overflow-y:auto;}
@@ -401,8 +346,6 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:10px;heigh
 .mg-chart{flex:1;height:28px;background:var(--bg);border:1px solid var(--border);border-radius:var(--r);position:relative;overflow:hidden;}
 .mg-bar{position:absolute;height:100%;}
 
-<!-- ================== HISTORY PAGE ================== -->
-<!-- Stores and reloads past simulations -->
 /* ── HISTORY PAGE ── */
 #page-history{flex-direction:column;overflow-y:auto;padding:20px 24px;}
 .history-toolbar{display:flex;align-items:center;gap:10px;margin-bottom:14px;}
@@ -491,8 +434,6 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:10px;heigh
 .sai-link:hover{opacity:1;}
 .sai-empty{font-size:0.64rem;color:var(--muted);text-align:center;padding:8px 0;font-style:italic;}
 
-<!-- ================== LEARN PAGE ================== -->
-<!-- Educational overview of CPU scheduling concepts --> 
 /* ── LEARN PAGE ── */
 #page-learn{overflow-y:auto;}
 .learn-hero{position:relative;padding:52px 56px 44px;border-bottom:1px solid var(--border);background:linear-gradient(135deg,rgba(0,232,184,0.04) 0%,transparent 50%,rgba(155,128,255,0.04) 100%);overflow:hidden;flex-shrink:0;}
@@ -1070,62 +1011,6 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:10px;heigh
 </div><!-- /z1 -->
 
 <script>
-
-/* ============================================================
-   NEXOS SYSTEM DOCUMENTATION
-   ============================================================
-
-   CORE SIMULATION ENGINE
-   ------------------------------------------------------------
-   This module executes CPU scheduling algorithms in a tick-based system.
-
-   - Each tick = 1 unit of CPU time
-   - Processes move between states:
-     READY → RUNNING → WAITING → DONE
-
-   Responsibilities:
-   - Select next process based on algorithm
-   - Handle preemption
-   - Update burst times
-   - Track metrics
-   - Trigger UI updates
-
-   Supported Algorithms:
-   - FCFS, SJF, SRTF, Round Robin, Priority, MLFQ
-
-
-   DESIGN DECISIONS
-   ------------------------------------------------------------
-   1. Tick-Based Simulation:
-      Enables step-by-step visualization and debugging.
-
-   2. Unified Scheduler Interface:
-      All algorithms share a common selection pipeline,
-      reducing duplication.
-
-   3. Real-Time Metrics:
-      Metrics are computed dynamically for immediate feedback.
-
-   4. Visual-First Approach:
-      Gantt charts + process cards improve intuition.
-
-   5. Heuristic AI (Not ML):
-      Ensures explainability and deterministic outputs.
-
-
-   EXTENSIBILITY
-   ------------------------------------------------------------
-   - Add new algorithms via scheduler logic
-   - Add metrics in analytics module
-   - UI supports additional visual layers
-
-   Future Work:
-   - Multi-core scheduling
-   - Real OS trace simulation
-   - ML-based scheduling policies
-
-============================================================ */
-
 // ==========================================
 // CONSTANTS & STATE
 // ==========================================
